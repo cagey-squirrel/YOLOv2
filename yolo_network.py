@@ -20,6 +20,10 @@ class TinyYOLOv2(torch.nn.Module):
             #(9.42, 5.11),
             #(16.62, 10.52),
         ),
+        lambda_conf_obj_not_detected=1,
+        lambda_class_loss=1,
+        lambda_coord_loss=1
+
     ):
         super().__init__()
 
@@ -75,85 +79,19 @@ class TinyYOLOv2(torch.nn.Module):
         num_cells_width = 18
         num_cells_height = 12
         # [5 + num_classes = center_x, center_y, width, height, conf + ONE_HOT_CLASS_VECTOR]
-        x[..., 0] = x[..., 0].sigmoid()
-        x[..., 1] = x[..., 1].sigmoid()
+
+        # Sigmoid gives us offset from cell's starting coordinates to bounding box center: for example 0.3
+        # torch.arrange gives us the coordinates of cells start: for example 5.0
+        # Combined they give us coordinate of bounding box in units of cells: for example 5.0 + 0.3 = 5.3
+        # To plot this coordinate on original image you need to multiply it by cell cize
+        x[..., 0] = x[..., 0].sigmoid() + torch.arange(num_cells_width)[None, :, None]
+        x[..., 1] = x[..., 1].sigmoid() + torch.arange(num_cells_height)[None, None, :]
         x[..., 2] = x[..., 2].exp()
         x[..., 3] = x[..., 3].exp()
         x[..., 4] = x[..., 4].sigmoid()
         x[..., 5:] = x[..., 5:].softmax(-1)
 
-        #print(f'basic x shape = {x.shape}')
-        #print(f'x shape = {x[..., 0].shape}')
-        #print(f'torch shape = {torch.arange(cells_width).shape}')
-        #exit(-1)
-        if for_output:
-            x[..., 0] += torch.arange(num_cells_width)[None, :, None]
-            x[..., 1] += torch.arange(num_cells_height)[None, None, :]
-
-        #print(torch.arange(num_cells_width)[None, :, None])
-        #print(torch.arange(num_cells_height)[None, None, :])
-        #print(x[...,0:2])
         return x
-    
-    def loss(self, x, labels):
-
-        # Loss = loss_class + loss_conf + loss_coord
-        # Od svih predikcija u jednoj celiji treba izabrati najsigurniju -> ovo je odradjeno jer ima samo jedna predikcija po celiji
-        # Od svih anchora u jednoj celiji treba izabrati onaj koji se najbolje uklapa u labelu -> ovo je odradjeno jer ima samo jedan anchor po celiji
-
-        # Dakle treba odrediti u kojoj celiji je objekat a u kojoj nije, ovo moze i kroz labele
-        # Treba primeniti odgovarajuci loss na sve delove
-
-        # Recimo da labels stize u formatu (B, A, W, H, (Cx, Cy, Wx, Wy, ONE_HOT_CLASS_ENCODINGS))
-        # Shape is (B, A, W, H, 5+C)
-
-        # Sta uzimamo za loss: Uzimamo rastojanje od gornjeg levog ugla do sredine objekta u celiji 
-        # U labeli je meni dato za sreidnu slike vrednost centra npr 0.55, rastojanje od gornjeg 
-
-        object_present = labels[..., 5] # getting the certainty from labels: 1 for object present, 0 for object absent 
-        object_not_present = torch.logical_not(object_present)
-
-
-    
-    def yolo(self, x):
-
-        # x is of size: grid, grid, anchors * (5 + num_classes)
-        # broj slika, (5+num_classes), nh, nw
-
-
-        # store the original shape of x
-        nB, _, nH, nW = x.shape
-        
-        # reshape the x-tensor: (batch size, # anchors, height, width, 5+num_classes)
-        x = x.view(nB, self.anchors.shape[0], -1, nH, nW).permute(0, 1, 3, 4, 2)
-
-        # get normalized auxiliary tensors
-        anchors = self.anchors.to(dtype=x.dtype, device=x.device)
-        anchor_x, anchor_y = anchors[:, 0], anchors[:, 1]
-
-        range_y, range_x = torch.meshgrid(
-            torch.arange(nH, dtype=x.dtype, device=x.device),
-            torch.arange(nW, dtype=x.dtype, device=x.device),
-        )
-
-        #print(range_x)
-  
-        # compute boxes.
-        x = torch.cat([
-            (x[:, :, :, :, 0, None].sigmoid() + range_x[None,None,:,:,None]) / nW,  # X center
-            (x[:, :, :, :, 1, None].sigmoid() + range_y[None,None,:,:,None]) / nH,  # Y center
-            (x[:, :, :, :, 2, None].exp() * anchor_x[None,:,None,None,None]) / nW,  # Width
-            (x[:, :, :, :, 3, None].exp() * anchor_y[None,:,None,None,None]) / nH,  # Height
-            x[:, :, :, :, 4, None].sigmoid(), # confidence
-            x[:, :, :, :, 5:].softmax(-1), # classes
-        ], -1)
-
-        # Za svaku celiju imamo po predikciju za centar x-a 
-        # Ta predikcija pomocu relu ide izmedju 0 i 1 i govori koliko je pomerena od centra izrazeno u procentima od sirine 
-        #print(x[:, :, :, :, 0, None].squeeze())
-        #print(range_x[None,None,:,:,None].squeeze())
-
-        return x # (batch_size, # anchors, height, width, 5+num_classes)
     
 
 def main():
@@ -189,13 +127,19 @@ def main():
     annotations = load_annotations(annotations_path)
     labels = get_labels_from_annotations(annotations, 389, 588)
 
+    jeremija_label = labels['jeremija']
+    loss = tyv2.loss(output, jeremija_label)
+    print(loss)
+    exit()
+
     images = load_images(images_dir)
 #
     for image_key in images:
         image = images[image_key]
         label = labels[image_key]
         
-        label = label.view(label.shape[0] * label.shape[1] * label.shape[2], label.shape[3])
+        #label = label.view(label.shape[0] * label.shape[1] * label.shape[2], label.shape[3])
+        label = label.view(-1, label.shape[3])
         print(f'label_shape = {label.shape}')
         display_images_with_bounding_boxes(image, label, cell_width, cell_height, anchor_width, anchor_height, name=image_key)
 
