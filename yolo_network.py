@@ -3,10 +3,12 @@ from PIL import Image
 from matplotlib import pyplot as plt
 import numpy as np
 import warnings
-from draw_rect import show_images_with_boxes, load_annotations, get_labels_from_annotations, load_images, display_images_with_bounding_boxes
+from draw_rect import show_images_with_boxes, display_images_with_bounding_boxes, non_max_surpression
 from loss_functions import YOLOLoss
 import os
+import random
 
+torch.set_printoptions(profile="full")
 warnings.filterwarnings("ignore")
 
 class TinyYOLOv2(torch.nn.Module):
@@ -96,6 +98,10 @@ class TinyYOLOv2(torch.nn.Module):
 
 def main():
 
+    torch.manual_seed(1302)
+    np.random.seed(1302)
+    random.seed(1302)
+
     num_cells_height = 12 
     num_cells_width = 18
     cell_height = 32
@@ -104,7 +110,6 @@ def main():
     anchor_width = 300
     
 
-
     torch.manual_seed(1302)
     tyv2 = TinyYOLOv2()
     rook = torch.Tensor(np.array(Image.open("all_same_size_imgs/jeremija.png")))
@@ -112,6 +117,8 @@ def main():
     rook = rook[None, :, :, :]
     print(f'image shape = {rook.shape}')
     output = tyv2.forward(rook)
+    non_max_surpression(output)
+    exit(-1)
     #display_images_with_bounding_boxes(rook[0], output[0, 0, :, :], cell_width, cell_height, anchor_width, anchor_height)
     #exit(-1)
     #print(f'output shape is {output.shape}')
@@ -170,5 +177,5 @@ def main():
     #show_images_with_boxes(rook, output)
 
     
-
-main()
+if __name__ == '__main__':
+    main()
