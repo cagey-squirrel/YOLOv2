@@ -114,6 +114,48 @@ def get_center_and_size_of_annotation(annotation, image_height, image_width, cel
     return box_center_x, box_center_y, box_width, box_height, label
 
 
+def non_max_surpression(predictions, confidence_treshold=0.5):
+    '''
+    Surpress any predictions with confidence less than confidence_treshold
+    In this task there is a maximum of one detection per class so we only take the prediction with maximum confidence per class
+
+    Parameters:
+        - predictions (torch.Tensor): prediction vector which will be surpressed
+            this vector has a shape of (B, W, H, (5 + Num_Classes))
+        - confidence_treshold (float: between 0 and 1): minimum confidence required for prediction
+            all predictions with lower confidence than this will be surpressed
+    '''
+
+    # Surpressing all predictions with confidence less than confidence_treshold
+    zeros_vector = torch.zeros((predictions.shape[-1]))
+    confidences = predictions[..., 4]
+    #predictions[confidences < confidence_treshold] = zeros_vector
+
+    class_probabilities = predictions[..., 5:]
+    
+    #torch.max()
+    maxes, max_indices = class_probabilities.max(dim=-1)
+    ##print(maxes)
+    #print(maxes.shape)
+    maxes = maxes[..., None]
+    class_one_hot = (class_probabilities == maxes)
+    #print(class_one_hot.int())
+
+    #print(class_one_hot)
+    
+    num_classes = class_probabilities.shape[-1]
+    for class_index in range(num_classes):
+        same_class = class_one_hot[..., class_index]
+        #print(same_class.shape)
+        conf_times_class = confidences * same_class
+        #conf_times_class = conf_times_class[..., None]
+        class_conf_maxes = conf_times_class.max()
+        #class_conf_maxes = class_conf_maxes[..., None]
+        print(f'conf_times_class_shape = {conf_times_class.shape}')
+        print(f'class_conf_maxes.shape = {class_conf_maxes.shape}')
+        predictions[np.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
+
+    print(predictions)
 
 def load_annotations(annotations_path):
     
