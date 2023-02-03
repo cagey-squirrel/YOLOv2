@@ -32,7 +32,7 @@ def get_center_and_size_of_annotation(annotation, cell_height, cell_width, ancho
     return box_center_x, box_center_y, box_width, box_height, label
 
 
-def load_labels(annotations_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction):
+def load_labels(annotations_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction, classes):
     '''
     Loads labels from csv file on annotations_path
 
@@ -43,6 +43,8 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
         - image_width (int): width of the image in pixels
         - anchor_height (int): height of the anchor in pixels
         - anchor_width (int): width of the anchor in pixels
+        - dimension_reduction (int): image_size_before_network / image_size_after_network
+        - classes (list): list of all classes in dataset (example: ['passanger', 'car', 'tree'])
 
 
     Returns:
@@ -64,7 +66,6 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
     labels = []
 
     # Getting indexes of labels
-    classes = ['Alan', 'Jeremija', 'Brok', 'Broj 1', 'Sir Oliver', 'Grunt']
     number_of_classes = len(classes)
     agent_name_to_class_number = {}
     for i, agent_name in enumerate(classes):
@@ -135,7 +136,7 @@ def load_annotations(annotations_path):
     return annotations
 
 
-def load_images(images_dir):
+def load_images(images_dir, normalize=True):
     '''
     Loads images from image_dir and returnes them as tensors
 
@@ -153,10 +154,15 @@ def load_images(images_dir):
     for image_name in os.listdir(images_dir):
 
         image_path = os.path.join(images_dir, image_name)
-        image = np.array(Image.open(image_path))
-        image = torch.Tensor(image)
+        image = Image.open(image_path)
+        image = image.convert('RGB')
+        image = np.array(image)
+        image = torch.Tensor(image).float()
         image = torch.permute(image, (2, 0, 1))
-        #image = image[None, :, :, :]
+
+        # Normalization:
+        if normalize:
+            image = image / 255
         
         image_id = image_name[:-4] # removing '.png' extension from image
         images.append(image)
@@ -168,7 +174,7 @@ def load_images(images_dir):
     return images, image_names, image_height, image_width
 
 
-def load_images_and_labels(images_dir_path, labels_path, anchor_height, anchor_width, dimension_reduction):
+def load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction):
     '''
     Loads images and labels
 
@@ -185,7 +191,7 @@ def load_images_and_labels(images_dir_path, labels_path, anchor_height, anchor_w
     
     images_data, image_names, image_height, image_width = load_images(images_dir_path)
     #print(f'loadimglbl image_height = {image_height}, image_width = {image_width}')
-    labels_data = load_labels(labels_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction)
+    labels_data = load_labels(labels_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction, classes)
 
     image_height = 384
     image_width = 576
@@ -263,7 +269,7 @@ def make_torch_datasets(training_images, training_labels, test_images, test_labe
     return train_dataset, test_dataset
 
 
-def make_torch_dataloaders(images_dir_path, labels_path, batch_size=8):
+def make_torch_dataloaders(images_dir_path, labels_path, classes, batch_size=8):
     '''
     This function loads all images and labels, splits them randomly into training and test set and wraps these datasets in DataLoader class.
     '''
@@ -271,7 +277,7 @@ def make_torch_dataloaders(images_dir_path, labels_path, batch_size=8):
     anchor_height = 250
     anchor_width = 300
 
-    images, labels = load_images_and_labels(images_dir_path, labels_path, anchor_height, anchor_width, dimension_reduction)
+    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction)
     training_images, training_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=10)
     train_dataset, test_dataset = make_torch_datasets(training_images, training_labels, test_images, test_labels)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, generator=torch.Generator().manual_seed(1302))
@@ -287,7 +293,8 @@ def main():
     anchor_height = 250
     anchor_width = 300
     dimension_reduction = 32
-    images, labels = load_images_and_labels(images_dir_path, labels_path, anchor_height, anchor_width, dimension_reduction)
+    classes = ['stagod']
+    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction)
 
     train_images, train_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=10)
 

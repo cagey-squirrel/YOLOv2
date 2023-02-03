@@ -38,7 +38,7 @@ class TinyYOLOv2(torch.nn.Module):
         self.slowpool = torch.nn.MaxPool2d(2, 1)
         self.pad = torch.nn.ReflectionPad2d((0, 1, 0, 1))
         self.norm1 = torch.nn.BatchNorm2d(16, momentum=0.1)
-        self.conv1 = torch.nn.Conv2d(4, 16, 3, 1, 1, bias=False)
+        self.conv1 = torch.nn.Conv2d(3, 16, 3, 1, 1, bias=False)
         self.norm2 = torch.nn.BatchNorm2d(32, momentum=0.1)
         self.conv2 = torch.nn.Conv2d(16, 32, 3, 1, 1, bias=False)
         self.norm3 = torch.nn.BatchNorm2d(64, momentum=0.1)

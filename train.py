@@ -12,7 +12,6 @@ def training_epoch(network, train_data, loss_function, optimizer, device):
     with torch.set_grad_enabled(True):
         optimizer.zero_grad()
         for images, labels in train_data:
-
             images, labels = images.to(device), labels.to(device)
             predictions = network(images)
 
@@ -46,13 +45,12 @@ def validation_epoch(network, validation_data, loss_function, device):
 
     return total_loss
 
-def training(images_dir_path, annotations_path, num_epochs):
+def training(images_dir_path, annotations_path, classes, num_epochs):
 
-    classes = ['Alan', 'Jeremija', 'Brok', 'Broj 1', 'Sir Oliver', 'Grunt']
     num_classes = len(classes)
     anchors = [(250, 300)]
 
-    train_loader, test_loader = make_torch_dataloaders(images_dir_path, annotations_path)
+    train_loader, test_loader = make_torch_dataloaders(images_dir_path, annotations_path, classes)
     network = TinyYOLOv2(num_classes=num_classes, anchors=anchors)
     loss_function = YoloLoss()
     optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
@@ -74,7 +72,7 @@ def training(images_dir_path, annotations_path, num_epochs):
         non_max_surpression(outputs)
 
         for image, output in zip(images, outputs):
-            display_images_with_bounding_boxes(image, output, 32, 32, 300, 250)
+            display_images_with_bounding_boxes(image, output, classes, 32, 32, 300, 250)
     
     return network
     
@@ -83,7 +81,8 @@ def training(images_dir_path, annotations_path, num_epochs):
 if __name__ == "__main__":
     images_dir_path = 'all_same_size_imgs'
     labels_path = 'annotations/annotations2.csv'
-    training(images_dir_path, labels_path, 1000)
+    classes = ['Alan', 'Jeremija', 'Brok', 'Broj 1', 'Sir Oliver', 'Grunt']
+    training(images_dir_path, labels_path, classes, 100)
     
 
 
