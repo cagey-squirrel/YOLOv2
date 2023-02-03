@@ -2,6 +2,7 @@ from pytorch_pipeline_util import make_torch_dataloaders
 from yolo_network import TinyYOLOv2
 from loss import YoloLoss
 import torch
+from draw_rect import non_max_surpression, display_images_with_bounding_boxes
 
 def training_epoch(network, train_data, loss_function, optimizer, device):
     
@@ -64,6 +65,16 @@ def training(images_dir_path, annotations_path, num_epochs):
 
         print(f'val_loss = {val_loss}')
         print(f'train_loss = {train_loss}')
+        print(f'{epoch}/{num_epochs}')
+    
+    for images, labels in train_loader:
+        images = images.to(device)
+        labels = labels.to(device)
+        outputs = network(images)
+        non_max_surpression(outputs)
+
+        for image, output in zip(images, outputs):
+            display_images_with_bounding_boxes(image, output, 32, 32, 300, 250)
     
     return network
     
@@ -72,7 +83,7 @@ def training(images_dir_path, annotations_path, num_epochs):
 if __name__ == "__main__":
     images_dir_path = 'all_same_size_imgs'
     labels_path = 'annotations/annotations2.csv'
-    training(images_dir_path, labels_path, 10)
+    training(images_dir_path, labels_path, 1000)
     
 
 

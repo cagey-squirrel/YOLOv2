@@ -24,11 +24,11 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
         - confidence_treshold (float: between 0 and 1): minimum confidence required for prediction
             all predictions with lower confidence than this will be surpressed
     '''
-
+    device = predictions.device
     # Surpressing all predictions with confidence less than confidence_treshold
-    zeros_vector = torch.zeros((predictions.shape[-1]))
+    zeros_vector = torch.zeros((predictions.shape[-1])).to(device)
     confidences = predictions[..., 4]
-    #predictions[confidences < confidence_treshold] = zeros_vector
+    predictions[confidences < confidence_treshold] = zeros_vector
 
     class_probabilities = predictions[..., 5:]
     
@@ -41,7 +41,7 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
         same_class = class_one_hot[..., class_index]
         conf_times_class = confidences * same_class
         class_conf_maxes = conf_times_class.max()
-        predictions[np.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
+        predictions[torch.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
 
     
 
@@ -58,9 +58,9 @@ def display_images_with_bounding_boxes(image, bounding_boxes, cell_width, cell_h
 
     image = torch.permute(image, (1, 2, 0)).int()
     fig, axis = plt.subplots()
+    image = image.detach().cpu().numpy()
     axis.imshow(image)
-    image = image.detach().numpy()
-    bounding_boxes = bounding_boxes.detach().numpy()
+    bounding_boxes = bounding_boxes.detach().cpu().numpy()
 
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
     

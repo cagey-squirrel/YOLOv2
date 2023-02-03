@@ -3,8 +3,7 @@ from PIL import Image
 from matplotlib import pyplot as plt
 import numpy as np
 import warnings
-from draw_rect import show_images_with_boxes, display_images_with_bounding_boxes, non_max_surpression
-from loss_functions import YOLOLoss
+from draw_rect import display_images_with_bounding_boxes, non_max_surpression
 import os
 import random
 
@@ -86,8 +85,14 @@ class TinyYOLOv2(torch.nn.Module):
         # torch.arrange gives us the coordinates of cells start: for example 5.0
         # Combined they give us coordinate of bounding box in units of cells: for example 5.0 + 0.3 = 5.3
         # To plot this coordinate on original image you need to multiply it by cell cize
-        x[..., 0] = x[..., 0].sigmoid() + torch.arange(num_cells_width)[None, :, None]
-        x[..., 1] = x[..., 1].sigmoid() + torch.arange(num_cells_height)[None, None, :]
+        cell_start_position_x = torch.arange(num_cells_width)[None, :, None]
+        cell_start_position_y = torch.arange(num_cells_height)[None, None, :]
+
+        cell_start_position_x = cell_start_position_x.to(x.device)
+        cell_start_position_y = cell_start_position_y.to(x.device)
+
+        x[..., 0] = x[..., 0].sigmoid() + cell_start_position_x
+        x[..., 1] = x[..., 1].sigmoid() + cell_start_position_y
         x[..., 2] = x[..., 2].exp()
         x[..., 3] = x[..., 3].exp()
         x[..., 4] = x[..., 4].sigmoid()
