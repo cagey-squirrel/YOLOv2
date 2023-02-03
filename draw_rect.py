@@ -45,7 +45,7 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
 
     
 
-def display_images_with_bounding_boxes(image, bounding_boxes, cell_width, cell_height, anchor_width, anchor_height, name=''):
+def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_width, cell_height, anchor_width, anchor_height, name=''):
     '''
     Displays images with bounding boxes around them
 
@@ -56,10 +56,12 @@ def display_images_with_bounding_boxes(image, bounding_boxes, cell_width, cell_h
             CLASS_ONE_HOT_ENCODING contains one element for each class 
     '''
 
-    image = torch.permute(image, (1, 2, 0)).int()
+    image = torch.permute(image, (1, 2, 0))
     fig, axis = plt.subplots()
     image = image.detach().cpu().numpy()
     axis.imshow(image)
+    image_height = image.shape[0]
+    image_width = image.shape[1]
     bounding_boxes = bounding_boxes.detach().cpu().numpy()
 
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
@@ -87,7 +89,16 @@ def display_images_with_bounding_boxes(image, bounding_boxes, cell_width, cell_h
 
         edge_color = 'red'
 
+        class_probabilities = bounding_box[5:]
+        class_max_index = class_probabilities.argmax()
+        object_class = classes[class_max_index]
+
+        # Making sure the box fits the image (doesnt go beyond)
+        top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
+        top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
+
         rect = matplotlib.patches.Rectangle((top_left_corner_x, top_left_corner_y), box_width, box_height, fill=False, edgecolor=edge_color) 
+        axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = object_class, color = 'red')
         axis.add_patch(rect)
 
     plt.show()
