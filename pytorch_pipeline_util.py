@@ -7,6 +7,7 @@ from collections import defaultdict
 from math import floor
 from torch.utils.data import random_split, Dataset, DataLoader
 from draw_rect import display_images_with_bounding_boxes
+import random
 
 
 def get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchor_height, anchor_width):
@@ -21,7 +22,6 @@ def get_center_and_size_of_annotation(annotation, cell_height, cell_width, ancho
 
     box_height = bot_right_corner_y - top_left_corner_y
     box_width = bot_right_corner_x - top_left_corner_x
-
     
     box_center_y /= cell_height
     box_center_x /= cell_width
@@ -48,7 +48,7 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
 
 
     Returns:
-        - labels (dict): dict containing label (Tensor) for each image
+        - labels (list): dict containing label (Tensor) for each image
           Each image has W * H cells, each cell has a label of length equal to (5 + Num_Classes)
           So for each image, label has a shape of (W, H, (5 + Num_Classes))
           (5 + NumClasses) represents [AnnotationCenterX, AnnotationCenterY, AnnotationWidth, AnnotationHeight, Confidence, Class1_Prob, Class2_prob...]
@@ -144,7 +144,7 @@ def load_images(images_dir, normalize=True):
         - images_dir (string): path to directory which contains images
     
     Returns:
-        - images (dict): dict containing image names as keys and tensors as images
+        - images (dict): dict containing image names as keys and touples (image (Tensor), image_name (string)) as values
             example for loading images 'alan.jpg' : images['alan'] = Tensor(1, 4, 256, 256) where 4 is the num of channels
     '''
     
@@ -165,7 +165,7 @@ def load_images(images_dir, normalize=True):
             image = image / 255
         
         image_id = image_name[:-4] # removing '.png' extension from image
-        images.append(image)
+        images.append((image, image_id))
         image_names.append(image_id)
         # images[image_id] = image  
     
@@ -176,7 +176,7 @@ def load_images(images_dir, normalize=True):
 
 def load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction):
     '''
-    Loads images and labels
+    Loads images and labels. 
 
     Input:
         - images_path (string): path to directory which contains images
@@ -224,14 +224,18 @@ def train_test_split(images, labels, test_percentage):
     total_length = len(images)
     test_data_len = int(total_length * test_percentage / 100)
 
-    images = torch.stack(images)
-    labels = torch.stack(labels)
+    images_and_labels_zipped = list(zip(images, labels))
+    random.shuffle(images_and_labels_zipped)
+    images, labels = zip(*images_and_labels_zipped)
+
+    #images = torch.stack(images)
+    #labels = torch.stack(labels)
 
 
     # Shuffleling data
-    random_permutation = torch.randperm(total_length)
-    images = images[random_permutation]
-    labels = labels[random_permutation]
+    #random_permutation = torch.randperm(total_length)
+    #images = images[random_permutation]
+    #labels = labels[random_permutation]
 
     test_images = images[:test_data_len]
     test_labels = labels[:test_data_len]
@@ -283,23 +287,27 @@ def make_torch_dataloaders(images_dir_path, labels_path, classes, batch_size=8):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, generator=torch.Generator().manual_seed(1302))
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, generator=torch.Generator().manual_seed(1302))
 
-    return train_loader, test_loader
+    return train_loader, test_loader, 
 
 
 def main():
     print('test')
-    images_dir_path = 'all_same_size_imgs'
-    labels_path = 'annotations/annotations2.csv'
+    images_dir_path = 'cropped_images'
+    labels_path = 'annotations/Anal-Ford-color-export.csv'
+
+    images_dir_path = 'C:\\Users\\cvetk\\Desktop\\projekat\\47_superhikov_veliki_poduhvat'
+    labels_path = 'C:\\Users\\cvetk\\Desktop\\projekat\\anotacije\\af-export.csv'
     anchor_height = 250
     anchor_width = 300
     dimension_reduction = 32
-    classes = ['stagod']
-    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction)
+    classes = ['Broj 1', 'Alan Ford', 'Bob Rok', 'Sir Oliver', 'Grunf', 'Jeremija', 'Sef']
 
+    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction)
+    
     train_images, train_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=10)
 
-    for image, label in zip(train_images, train_labels):
-        display_images_with_bounding_boxes(image, label, 32, 32, anchor_width, anchor_height)
+    for (image, image_name), label in zip(train_images, train_labels):
+        display_images_with_bounding_boxes(image, label, classes, 32, 32, anchor_width, anchor_height)
 
     print(f'train_images.shape = {train_images.shape}')
     print(f'train_labels.shape = {train_labels.shape}')
