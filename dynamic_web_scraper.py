@@ -53,9 +53,13 @@ def scrape_images_from_url_to_dir(url, dir_path):
             outer_page_div.location_once_scrolled_into_view # Scrolling into the location of image div so the image loads
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, f"page{image_index}"))) # Wait for image to load
 
-            image_tag = outer_page_div.find_element(By.XPATH, f".//img[@class='absimg']")
-            image_source = image_tag.get_attribute('src')
-            print(image_source)
+            while True:
+                image_tag = outer_page_div.find_element(By.XPATH, f".//img[@class='absimg']")
+                image_source = image_tag.get_attribute('src')
+                if not image_source is None:
+                    break
+                time.sleep(1) # Image was not yet loaded, wait for it to load
+            
             download_image_from_url_to_dir(image_source, dir_path, image_index)
 
         except NoSuchElementException:
@@ -64,9 +68,23 @@ def scrape_images_from_url_to_dir(url, dir_path):
 
 
 def main():
-    url = 'https://www.scribd.com/fullscreen/140579892?access_key=key-abqPvSXwqinM1rGh9SsW&allow_share=true&escape=false&show_recommendations=false&view_mode=scroll'
-    dir_path = '34_dvanaest_umetnika'
-    scrape_images_from_url_to_dir(url, dir_path)
+
+    urls = [
+        'https://www.scribd.com/fullscreen/140622754?access_key=key-abqPvSXwqinM1rGh9SsW&allow_share=true&escape=false&show_recommendations=false&view_mode=scroll',
+        'https://www.scribd.com/fullscreen/140621346?access_key=key-abqPvSXwqinM1rGh9SsW&allow_share=true&escape=false&show_recommendations=false&view_mode=scroll',
+        'https://www.scribd.com/fullscreen/140623957?access_key=key-abqPvSXwqinM1rGh9SsW&allow_share=true&escape=false&show_recommendations=false&view_mode=scroll',
+        'https://www.scribd.com/fullscreen/140625940?access_key=key-abqPvSXwqinM1rGh9SsW&allow_share=true&escape=false&show_recommendations=false&view_mode=scroll'
+    ]
+
+    dir_paths = [
+        "44_derbi",
+        "45_tako_je_nast_TNT",
+        "46_povratak_superhika",
+        "47_superhikov_veliki_poduhvat"
+    ]
+
+    for url, dir_path in zip(urls, dir_paths):
+        scrape_images_from_url_to_dir(url, dir_path)
 
 
 if __name__ == "__main__":
