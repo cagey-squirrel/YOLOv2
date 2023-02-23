@@ -43,7 +43,6 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
         class_conf_maxes = conf_times_class.max()
         predictions[torch.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
 
-    
 
 def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_width, cell_height, anchor_width, anchor_height, name=''):
     '''
@@ -111,19 +110,20 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, height_and_width_i
     
     for bounding_box in bounding_boxes:
 
-        if not bounding_box.any():
+        if bounding_box[4] < 0.1:
             continue
 
         # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
         # Box_center_x, and Box_center_y are in units of cells so we need to multiply them to display them on image
         # box_width and box_height are in units of anchor sizes so they too need to be multiplied in order to be displayed
-
+        #print(f'box_center_x = {bounding_box[0]} box_center_y = {bounding_box[1]}')
         box_center_x = bounding_box[0] * cell_width
         box_center_y = bounding_box[1] * cell_height 
 
         box_width  = bounding_box[2] * anchor_width 
         box_height = bounding_box[3] * anchor_height
 
+        
         # Class Rectangle needs top left corner as input
         top_left_corner_x = box_center_x - box_width  / 2
         top_left_corner_y = box_center_y - box_height / 2
@@ -141,7 +141,7 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, height_and_width_i
         axis.add_patch(rect)
 
 
-def output_predictions(images, labels_list, predictions, images_names, classes, height_and_width_info, output_dir_path, epoch_num):
+def output_predictions(images, labels_list, predictions, images_names, epoch_num, params):
     '''
     Outputs prediction detections and true label boxes on images
 
@@ -151,6 +151,8 @@ def output_predictions(images, labels_list, predictions, images_names, classes, 
         - predictions
         - images_names
     '''
+
+    height_and_width_info, output_dir_path, train_text_file, classes = params
 
     output_dir = os.path.join(output_dir_path, str(epoch_num))
     if not os.path.exists(output_dir):
@@ -169,6 +171,14 @@ def output_predictions(images, labels_list, predictions, images_names, classes, 
         add_bounding_boxes_to_axis(labels, axis, classes, height_and_width_info, color='green')
         add_bounding_boxes_to_axis(prediction, axis, classes, height_and_width_info, color='red')
 
-        plt.savefig(os.path.join(output_dir, image_name))
+        image_path = os.path.join(output_dir, image_name)
+        plt.savefig(image_path)
+
+        #labels = labels.reshape((-1, labels.shape[-1]))
+        #np.savetxt(image_path + '.txt', labels, fmt='% 1.2f')
+
+        prediction = prediction.reshape((-1, prediction.shape[-1]))
+        np.savetxt(image_path + '.txt', prediction, fmt='% 1.2f')
+
 
         

@@ -32,7 +32,7 @@ def get_center_and_size_of_annotation(annotation, cell_height, cell_width, ancho
     return box_center_x, box_center_y, box_width, box_height, label
 
 
-def load_labels(annotations_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction, classes):
+def load_labels(annotations_path, image_names, classes, height_and_width_info):
     '''
     Loads labels from csv file on annotations_path
 
@@ -54,12 +54,12 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
           (5 + NumClasses) represents [AnnotationCenterX, AnnotationCenterY, AnnotationWidth, AnnotationHeight, Confidence, Class1_Prob, Class2_prob...]
     
     '''
-    
-    cell_height = dimension_reduction
-    cell_width = dimension_reduction
+
+    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info
 
     num_cells_height = image_height // cell_height
     num_cells_width = image_width // cell_width
+
 
     annotations = load_annotations(annotations_path)
     #labels = defaultdict(lambda: [])
@@ -82,7 +82,7 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
         
         for annotation in annotation_list:
             box_center_x, box_center_y, box_width, box_height, class_name = get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchor_height, anchor_width)
-            
+
             box_center_cell_index_x = floor(box_center_x)
             box_center_cell_index_y = floor(box_center_y)
 
@@ -95,11 +95,8 @@ def load_labels(annotations_path, image_names, image_height, image_width, anchor
             label = np.array(label)
             image_labels[box_center_cell_index_x, box_center_cell_index_y, :] = label
 
-        #print(image_labels)
-        #input('labels')
         image_labels = torch.Tensor(image_labels)
         labels.append(image_labels)
-        #labels[image_name] = image_labels
     
     return labels
 
@@ -168,13 +165,11 @@ def load_images(images_dir, normalize=True):
         images.append((image, image_id))
         image_names.append(image_id)
         # images[image_id] = image  
-    
-    image_height, image_width = image.shape[1], image.shape[2]
 
-    return images, image_names, image_height, image_width
+    return images, image_names
 
 
-def load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction):
+def load_images_and_labels(images_dir_path, labels_path, classes, height_and_width_info):
     '''
     Loads images and labels. 
 
@@ -189,9 +184,10 @@ def load_images_and_labels(images_dir_path, labels_path, classes, anchor_height,
         - labels_data: list which contains labels
     '''
     
-    images_data, image_names, image_height, image_width = load_images(images_dir_path)
-    #print(f'loadimglbl image_height = {image_height}, image_width = {image_width}')
-    labels_data = load_labels(labels_path, image_names, image_height, image_width, anchor_height, anchor_width, dimension_reduction, classes)
+    images_data, image_names = load_images(images_dir_path)
+    
+
+    labels_data = load_labels(labels_path, image_names, classes, height_and_width_info)
 
     image_height = 384
     image_width = 576
@@ -273,16 +269,16 @@ def make_torch_datasets(training_images, training_labels, test_images, test_labe
     return train_dataset, test_dataset
 
 
-def make_torch_dataloaders(images_dir_path, labels_path, classes, batch_size=8):
+def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info, batch_size=8):
     '''
     This function loads all images and labels, splits them randomly into training and test set and wraps these datasets in DataLoader class.
     '''
-    dimension_reduction = 32
-    anchor_height = 250
-    anchor_width = 300
 
-    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, anchor_height, anchor_width, dimension_reduction)
-    training_images, training_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=10)
+    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info
+    
+
+    images, labels = load_images_and_labels(images_dir_path, labels_path, classes, height_and_width_info)
+    training_images, training_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=20)
     train_dataset, test_dataset = make_torch_datasets(training_images, training_labels, test_images, test_labels)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, generator=torch.Generator().manual_seed(1302))
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, generator=torch.Generator().manual_seed(1302))

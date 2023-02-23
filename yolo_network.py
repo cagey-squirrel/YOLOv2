@@ -53,7 +53,7 @@ class TinyYOLOv2(torch.nn.Module):
         self.conv7 = torch.nn.Conv2d(512, 1024, 3, 1, 1, bias=False)
         self.norm8 = torch.nn.BatchNorm2d(1024, momentum=0.1)
         self.conv8 = torch.nn.Conv2d(1024, 1024, 3, 1, 1, bias=False)
-        self.conv9 = torch.nn.Conv2d(1024, len(anchors) * (5 + num_classes), 1, 1, 0)
+        self.conv9 = torch.nn.Conv2d(1024, len(anchors) * (5 + num_classes), 11, 1, 0)
 
     def forward(self, x, yolo=True):
         x = self.relu(self.pool(self.norm1(self.conv1(x))))
@@ -77,8 +77,8 @@ class TinyYOLOv2(torch.nn.Module):
     def my_yolo(self, x, for_output=True):
         x = torch.permute(x, (0, 3, 2, 1)) # (Batch, width, height, [5+num_classes])
 
-        num_cells_width = 18
-        num_cells_height = 12
+        num_cells_width = 8
+        num_cells_height = 2
         # [5 + num_classes = center_x, center_y, width, height, conf + ONE_HOT_CLASS_VECTOR]
 
         # Sigmoid gives us offset from cell's starting coordinates to bounding box center: for example 0.3
@@ -117,11 +117,12 @@ def main():
 
     torch.manual_seed(1302)
     tyv2 = TinyYOLOv2()
-    rook = torch.Tensor(np.array(Image.open("all_same_size_imgs/jeremija.png")))
+    rook = torch.Tensor(np.array(Image.open("/media/workstation/Disk 1/cropped_images_small/14_udar_munje_004_high.jpg")))
     rook = torch.permute(rook, (2, 0, 1))
     rook = rook[None, :, :, :]
     print(f'image shape = {rook.shape}')
     output = tyv2.forward(rook)
+    print(f'output shape = {output.shape}')
     non_max_surpression(output)
     exit(-1)
     #display_images_with_bounding_boxes(rook[0], output[0, 0, :, :], cell_width, cell_height, anchor_width, anchor_height)
