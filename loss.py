@@ -8,7 +8,8 @@ class YoloLoss(torch.nn.Module):
         # Loss functions:
         self.mse_loss = torch.nn.MSELoss(reduction='sum')
         #self.ce_loss = torch.nn.CrossEntropyLoss(reduction='sum')
-        self.ce_loss = torch.nn.CrossEntropyLoss(weight=torch.Tensor([6, 4.3, 4.3, 10, 15, 18, 6.7]).to("cuda:0"), reduction='sum')
+        device = torch.device("cpu" if not torch.cuda.is_available() else "cuda:0")
+        self.ce_loss = torch.nn.CrossEntropyLoss(weight=torch.Tensor([6, 4.3, 4.3, 10, 15, 18, 6.7]).to(device), reduction='sum')
 
         # Lambdas:
         self.lambda_conf_obj_detected = lambda_conf_obj_detected

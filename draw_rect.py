@@ -42,7 +42,94 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
         conf_times_class = confidences * same_class
         class_conf_maxes = conf_times_class.max()
         predictions[torch.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
+    
 
+def get_corners(prediction):
+    '''
+    Calculates top left corner and bottom right corner from prediction
+    prediction is bounding box represented as [bb_center_x, bb_center_y, bb_width, bb_height, blabla]
+    '''
+
+    bb_center_x, bb_center_y, bb_width, bb_height, *rest_unused = prediction
+
+    top_left_corner_x = bb_center_x - bb_width/2
+    top_left_corner_y = bb_center_y - bb_height/2
+    top_left_corner = (top_left_corner_x, top_left_corner_y)
+
+    bot_left_corner_x = bb_center_x + bb_width/2
+    bot_left_corner_y = bb_center_y + bb_height/2
+    bot_left_corner = (bot_left_corner_x, bot_left_corner_y)
+
+    return top_left_corner, bot_left_corner
+
+
+def get_intersect(top_left_corner1, bot_right_corner_1, top_left_corner2, bot_right_corner_2):
+    '''
+    Returns the area of intersection between two boxes bounded by inputs
+    '''
+    
+    intersect_width = min(bot_right_corner_1[0], bot_right_corner_2[0]) - max(top_left_corner1[0], top_left_corner2[0])
+    intersect_height = min(bot_right_corner_1[1], bot_right_corner_2[1]) - max(top_left_corner1[1], top_left_corner2[1])
+
+    return intersect_width * intersect_height
+
+
+
+
+def get_intersection_over_union(prediction1, prediction2):
+    '''
+    Returns intersection over union value between two bounding boxes represented by prediction1 and prediction2
+    '''
+    top_left_corner1, bot_right_corner_1 = get_corners(prediction1)
+    top_left_corner2, bot_right_corner_2 = get_corners(prediction2)
+
+    # Calculating areas of bounding boxes: area = (brc.y - tlc.y) * (brc.x - tlc.x)
+    area1 = (bot_right_corner_1[0] - top_left_corner1[0]) * (bot_right_corner_1[1] - top_left_corner1[1])
+    area2 = (bot_right_corner_2[0] - top_left_corner2[0]) * (bot_right_corner_2[1] - top_left_corner2[1])
+
+    intersect = get_intersect(top_left_corner1, bot_right_corner_1, top_left_corner2, bot_right_corner_2)
+
+    return intersect / (area1 + area2 - intersect)
+
+
+
+
+def surpress_overlaping_detections(predictions, overlap_treshold=0.1):
+    '''
+    Returns a list of filtered predictions.
+    If a prediction overlaps with another prediction for more than overlap_tereshold then the prediction with lower confidence is filtered
+    '''
+
+    active_predictions = {}
+    key_iter = 0
+
+    for prediction in predictions:
+        confidence = prediction[4]
+        keep_prediction = True
+        ids_for_removal = []
+        if confidence > 0:
+            for key in active_predictions:
+                active_prediction = active_predictions[key]
+                iou = get_intersection_over_union(prediction, active_prediction)
+                if iou > overlap_treshold:
+                    active_prediction_confidence = active_prediction[4]
+                    if active_prediction_confidence > confidence: # Current prediction overlaps above treshold with another prediction with higher confidence
+                        keep_prediction = False
+                        break # So we do not save current prediction
+                    else: # This prediction has a higher confidence thatn active prediction it overlaps with
+                        # So we delete that active prediction
+                        ids_for_removal.append(key)
+            if keep_prediction:
+                active_predictions[key_iter] = prediction
+                key_iter += 1
+
+                for id_for_removal in ids_for_removal:
+                    del active_predictions[id_for_removal]
+    
+    print(f'len = {len(list(active_predictions.values()))}')
+    return list(active_predictions.values())
+
+            
 
 def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_width, cell_height, anchor_width, anchor_height, name=''):
     '''
@@ -64,7 +151,6 @@ def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_widt
     bounding_boxes = bounding_boxes.detach().cpu().numpy()
 
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
-    
     
     for bounding_box in bounding_boxes:
         
@@ -103,10 +189,10 @@ def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_widt
     plt.show()
 
 
-def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, height_and_width_info, color):
+def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, color):
 
-    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
+    bounding_boxes = surpress_overlaping_detections(bounding_boxes)
     
     for bounding_box in bounding_boxes:
 
@@ -114,14 +200,11 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, height_and_width_i
             continue
 
         # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
-        # Box_center_x, and Box_center_y are in units of cells so we need to multiply them to display them on image
-        # box_width and box_height are in units of anchor sizes so they too need to be multiplied in order to be displayed
-        #print(f'box_center_x = {bounding_box[0]} box_center_y = {bounding_box[1]}')
-        box_center_x = bounding_box[0] * cell_width
-        box_center_y = bounding_box[1] * cell_height 
+        box_center_x = bounding_box[0]
+        box_center_y = bounding_box[1]
 
-        box_width  = bounding_box[2] * anchor_width 
-        box_height = bounding_box[3] * anchor_height
+        box_width  = bounding_box[2]
+        box_height = bounding_box[3]
 
         
         # Class Rectangle needs top left corner as input
@@ -131,13 +214,16 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, height_and_width_i
         class_probabilities = bounding_box[5:]
         class_max_index = class_probabilities.argmax()
         object_class = classes[class_max_index]
+        confidence = bounding_box[4]
+
+        class_and_confidence = object_class + " " + str(confidence*100)[:2] + "%"
 
         # Making sure the box fits the image (doesnt go beyond)
-        top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
-        top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
+        # top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
+        # top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
 
         rect = matplotlib.patches.Rectangle((top_left_corner_x, top_left_corner_y), box_width, box_height, fill=False, edgecolor=color) 
-        axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = object_class, color = 'red')
+        axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = class_and_confidence, color = 'red')
         axis.add_patch(rect)
 
 
@@ -162,14 +248,31 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     labels_list = labels_list.detach().cpu().numpy()
     predictions = predictions.detach().cpu().numpy()
 
+    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info 
+    # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
+    # Box_center_x, and Box_center_y are in units of cells so we need to multiply them to display them on image
+    # box_width and box_height are in units of anchor sizes so they too need to be multiplied in order to be displayed
+    #print(f'box_center_x = {bounding_box[0]} box_center_y = {bounding_box[1]}')
+    labels_list[..., 0] *= cell_width
+    labels_list[..., 1] *= cell_height
+    labels_list[..., 2] *= anchor_width
+    labels_list[..., 3] *= anchor_height
+
+    predictions[..., 0] *= cell_width
+    predictions[..., 1] *= cell_height
+    predictions[..., 2] *= anchor_width
+    predictions[..., 3] *= anchor_height
+
+
+
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):
         fig, axis = plt.subplots()
 
         image = np.transpose(image, (1,2,0))
         axis.imshow(image)
 
-        add_bounding_boxes_to_axis(labels, axis, classes, height_and_width_info, color='green')
-        add_bounding_boxes_to_axis(prediction, axis, classes, height_and_width_info, color='red')
+        add_bounding_boxes_to_axis(labels, axis, classes, color='green')
+        add_bounding_boxes_to_axis(prediction, axis, classes, color='red')
 
         image_path = os.path.join(output_dir, image_name)
         plt.savefig(image_path)
