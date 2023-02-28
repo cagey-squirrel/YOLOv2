@@ -61,7 +61,7 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
     total_loss /= batches 
 
     if epoch_num % 10 == 0 or epoch_num < 10:
-        #non_max_surpression(predictions)
+        non_max_surpression(predictions)
         output_predictions(images, labels, predictions, images_names, epoch_num, valid_params)
 
     
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     classes = ['Broj 1', 'Alan Ford', 'Bob Rok', 'Sir Oliver', 'Grunf', 'Jeremija', 'Sef']
 
     output_dir_name = 'first_training2' + str(time())
-    output_dir_path = os.path.join('output', output_dir_name)
+    output_dir_path = os.path.join('/media/workstation/Disk 1/yolo_output', output_dir_name)
     os.mkdir(output_dir_path)
 
     image_height = 384
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     
     height_and_width_info = image_height, image_width, cell_width, cell_height, anchors
     
-    training(images_dir_path, labels_path, classes, 15000, height_and_width_info, output_dir_path)
+    training(images_dir_path, labels_path, classes, 1500, height_and_width_info, output_dir_path)
     
 
 

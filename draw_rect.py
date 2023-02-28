@@ -126,7 +126,7 @@ def surpress_overlaping_detections(predictions, overlap_treshold=0.1):
                 for id_for_removal in ids_for_removal:
                     del active_predictions[id_for_removal]
     
-    print(f'len = {len(list(active_predictions.values()))}')
+    # print(f'len = {len(list(active_predictions.values()))}')
     return list(active_predictions.values())
 
             
@@ -216,14 +216,14 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, color):
         object_class = classes[class_max_index]
         confidence = bounding_box[4]
 
-        class_and_confidence = object_class + " " + str(confidence*100)[:2] + "%"
+        class_and_confidence = object_class + " " + str(confidence*100)[:3] + "%"
 
         # Making sure the box fits the image (doesnt go beyond)
         # top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
         # top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
 
         rect = matplotlib.patches.Rectangle((top_left_corner_x, top_left_corner_y), box_width, box_height, fill=False, edgecolor=color) 
-        axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = class_and_confidence, color = 'red')
+        axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = class_and_confidence, color = color)
         axis.add_patch(rect)
 
 
