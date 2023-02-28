@@ -248,21 +248,31 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     labels_list = labels_list.detach().cpu().numpy()
     predictions = predictions.detach().cpu().numpy()
 
-    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info 
+    image_height, image_width, cell_width, cell_height, anchors = height_and_width_info 
     # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
     # Box_center_x, and Box_center_y are in units of cells so we need to multiply them to display them on image
     # box_width and box_height are in units of anchor sizes so they too need to be multiplied in order to be displayed
     #print(f'box_center_x = {bounding_box[0]} box_center_y = {bounding_box[1]}')
+
     labels_list[..., 0] *= cell_width
     labels_list[..., 1] *= cell_height
-    labels_list[..., 2] *= anchor_width
-    labels_list[..., 3] *= anchor_height
+
+    #labels_list[..., 2] *= anchor_width
+    #labels_list[..., 3] *= anchor_height
+
+    labels_list[..., 2] *= anchors[:,0]
+    labels_list[..., 3] *= anchors[:,1]
 
     predictions[..., 0] *= cell_width
     predictions[..., 1] *= cell_height
-    predictions[..., 2] *= anchor_width
-    predictions[..., 3] *= anchor_height
 
+
+    #predictions[..., 2] *= anchor_width
+    #predictions[..., 3] *= anchor_height
+
+
+    predictions[..., 2] *= anchors[:,0]
+    predictions[..., 3] *= anchors[:,1]
 
 
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):

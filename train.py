@@ -72,7 +72,7 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
 def training(images_dir_path, annotations_path, classes, num_epochs, height_and_width_info, output_dir_path):
 
     num_classes = len(classes)
-    anchors = [(250, 300)]
+    *rest, anchors = height_and_width_info
 
     train_output_dir_path = os.path.join(output_dir_path, 'train')
     valid_output_dir_path = os.path.join(output_dir_path, 'valid')
@@ -117,9 +117,9 @@ def training(images_dir_path, annotations_path, classes, num_epochs, height_and_
 if __name__ == "__main__":
     np.random.seed(1302)
     random.seed(1302)
-    images_dir_path = '/media/workstation/Disk 1/cropped_images'
+    images_dir_path = 'cropped_images_small'
     labels_path = 'annotations//Alan-Ford-color-export.csv'
-    #labels_path = 'annotations//annotations.csv'
+    labels_path = 'annotations//annotations_small.csv'
     classes = ['Broj 1', 'Alan Ford', 'Bob Rok', 'Sir Oliver', 'Grunf', 'Jeremija', 'Sef']
 
     output_dir_name = 'first_training2' + str(time())
@@ -130,15 +130,18 @@ if __name__ == "__main__":
     image_width = 576
     num_cells_height = 2
     num_cells_width = 8
-    #anchor_height = 250
-    #anchor_width = 300
-    anchor_height = 175
-    anchor_width = 175
+
+    anchors = \
+        [
+            (150, 150),
+            (250, 250)
+        ]
+    anchors = np.array(anchors)
     cell_width = 72
     cell_height = 192
 
     
-    height_and_width_info = image_height, image_width, cell_width, cell_height, anchor_width, anchor_height
+    height_and_width_info = image_height, image_width, cell_width, cell_height, anchors
     
     training(images_dir_path, labels_path, classes, 15000, height_and_width_info, output_dir_path)
     

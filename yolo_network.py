@@ -20,16 +20,14 @@ class TinyYOLOv2(torch.nn.Module):
             #(6.63, 11.38),
             #(9.42, 5.11),
             #(16.62, 10.52),
-        ),
-        lambda_conf_obj_not_detected=1,
-        lambda_class_loss=1,
-        lambda_coord_loss=1
-
+        )
     ):
         super().__init__()
 
         # Parameters
-        self.register_buffer("anchors", torch.tensor(anchors))
+        self.num_anchors = len(anchors)
+        self.anchors = anchors
+        #self.register_buffer("anchors", torch.tensor(anchors))
         self.num_classes = num_classes
 
         # Layers
@@ -53,7 +51,7 @@ class TinyYOLOv2(torch.nn.Module):
         self.conv7 = torch.nn.Conv2d(512, 1024, 3, 1, 1, bias=False)
         self.norm8 = torch.nn.BatchNorm2d(1024, momentum=0.1)
         self.conv8 = torch.nn.Conv2d(1024, 1024, 3, 1, 1, bias=False)
-        self.conv9 = torch.nn.Conv2d(1024, len(anchors) * (5 + num_classes), 11, 1, 0)
+        self.conv9 = torch.nn.Conv2d(1024, self.num_anchors * (5 + num_classes), 11, 1, 0)
 
     def forward(self, x, yolo=True):
         x = self.relu(self.pool(self.norm1(self.conv1(x))))
@@ -65,17 +63,14 @@ class TinyYOLOv2(torch.nn.Module):
         x = self.relu(self.norm7(self.conv7(x)))
         x = self.relu(self.norm8(self.conv8(x)))
         x = self.conv9(x)
-        #if yolo:
-        #    x = self.yolo(x)
-        # shape of x is now (Batch_size, [5+num_classes], height_in_cells, width_in_cells)
-        # 1 11 12 18
-        #print(x.shape)
-        x = self.my_yolo(x)
+        x = self.yolo(x)
         
         return x
 
-    def my_yolo(self, x, for_output=True):
-        x = torch.permute(x, (0, 3, 2, 1)) # (Batch, width, height, [5+num_classes])
+    def yolo(self, x):
+
+        x = torch.permute(x, (0, 3, 2, 1)) # (Batch, width, height, len(anchors) * [5+num_classes])
+        x = torch.reshape(x, (x.shape[0], x.shape[1], x.shape[2], self.num_anchors, x.shape[3] // self.num_anchors))
 
         num_cells_width = 8
         num_cells_height = 2
@@ -85,8 +80,8 @@ class TinyYOLOv2(torch.nn.Module):
         # torch.arrange gives us the coordinates of cells start: for example 5.0
         # Combined they give us coordinate of bounding box in units of cells: for example 5.0 + 0.3 = 5.3
         # To plot this coordinate on original image you need to multiply it by cell cize
-        cell_start_position_x = torch.arange(num_cells_width)[None, :, None]
-        cell_start_position_y = torch.arange(num_cells_height)[None, None, :]
+        cell_start_position_x = torch.arange(num_cells_width)[:, None, None]
+        cell_start_position_y = torch.arange(num_cells_height)[:, None]
 
         cell_start_position_x = cell_start_position_x.to(x.device)
         cell_start_position_y = cell_start_position_y.to(x.device)

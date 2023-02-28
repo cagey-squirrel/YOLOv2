@@ -8,15 +8,15 @@ from math import floor
 from torch.utils.data import random_split, Dataset, DataLoader
 from draw_rect import display_images_with_bounding_boxes
 import random
+from matplotlib import pyplot as plt
 
-
-def get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchor_height, anchor_width):
+def get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchors):
     '''
     Calculates objects center coordinate and the size of bounding box
     Center coordinates are divided by cell sizes
     Bounding box sizes are divided by anchor sizes
     '''
-    top_left_corner_y, top_left_corner_x, bot_right_corner_y, bot_right_corner_x, label = annotation
+    top_left_corner_y, top_left_corner_x, bot_right_corner_y, bot_right_corner_x, label, anchor_index = annotation
     box_center_y = (bot_right_corner_y + top_left_corner_y) // 2
     box_center_x = (bot_right_corner_x + top_left_corner_x) // 2 
 
@@ -26,10 +26,11 @@ def get_center_and_size_of_annotation(annotation, cell_height, cell_width, ancho
     box_center_y /= cell_height
     box_center_x /= cell_width
 
+    anchor_height, anchor_width = anchors[anchor_index]
     box_height /= anchor_height
     box_width /= anchor_width
 
-    return box_center_x, box_center_y, box_width, box_height, label
+    return box_center_x, box_center_y, box_width, box_height, label, anchor_index
 
 
 def load_labels(annotations_path, image_names, classes, height_and_width_info):
@@ -55,13 +56,14 @@ def load_labels(annotations_path, image_names, classes, height_and_width_info):
     
     '''
 
-    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info
+    image_height, image_width, cell_width, cell_height, anchors = height_and_width_info
+    num_anchors = anchors.shape[0]
 
     num_cells_height = image_height // cell_height
     num_cells_width = image_width // cell_width
 
 
-    annotations = load_annotations(annotations_path)
+    annotations = load_annotations(annotations_path, anchors)
     #labels = defaultdict(lambda: [])
     labels = []
 
@@ -76,13 +78,14 @@ def load_labels(annotations_path, image_names, classes, height_and_width_info):
     for image_name in image_names:
         
         # Each image has a label for each cell so the shape of image_labels is (Num_cells_width, Num_cells_height, (5 + NumClasses))
-        image_labels = np.zeros(shape=(num_cells_width, num_cells_height, (5 + number_of_classes)))
+        image_labels = np.zeros(shape=(num_cells_width, num_cells_height, num_anchors, (5 + number_of_classes)))
 
         annotation_list = annotations[image_name]
         
         for annotation in annotation_list:
-            box_center_x, box_center_y, box_width, box_height, class_name = get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchor_height, anchor_width)
 
+            box_center_x, box_center_y, box_width, box_height, class_name, anchor_index = get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchors)
+      
             box_center_cell_index_x = floor(box_center_x)
             box_center_cell_index_y = floor(box_center_y)
 
@@ -93,15 +96,27 @@ def load_labels(annotations_path, image_names, classes, height_and_width_info):
             label.extend(class_one_hot_encoding)
             
             label = np.array(label)
-            image_labels[box_center_cell_index_x, box_center_cell_index_y, :] = label
+            image_labels[box_center_cell_index_x, box_center_cell_index_y, anchor_index, :] = label
 
         image_labels = torch.Tensor(image_labels)
         labels.append(image_labels)
     
     return labels
 
+def get_anchor_index(top_left_corner_x, top_left_corner_y, bot_right_corner_x, bot_right_corner_y, anchors):
 
-def load_annotations(annotations_path):
+    width = bot_right_corner_x - top_left_corner_x
+    height = bot_right_corner_y - top_left_corner_y
+
+    if height < 200 and width < 200:
+        anchor_index = 0
+    else:
+        anchor_index = 1
+    
+    return anchor_index
+
+
+def load_annotations(annotations_path, anchors):
     '''
     Loads annotations from annotations_path
 
@@ -128,7 +143,9 @@ def load_annotations(annotations_path):
         bot_right_corner_y = int(float(image_info[4]))
         label = image_info[5].strip('\"')
 
-        annotations[image_name].append((top_left_corner_y, top_left_corner_x, bot_right_corner_y, bot_right_corner_x, label))
+        anchor_index = get_anchor_index(top_left_corner_x, top_left_corner_y, bot_right_corner_x, bot_right_corner_y, anchors)
+
+        annotations[image_name].append((top_left_corner_y, top_left_corner_x, bot_right_corner_y, bot_right_corner_x, label, anchor_index))
     
     return annotations
 
@@ -274,7 +291,7 @@ def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_wid
     This function loads all images and labels, splits them randomly into training and test set and wraps these datasets in DataLoader class.
     '''
 
-    image_height, image_width, cell_width, cell_height, anchor_width, anchor_height = height_and_width_info
+    #image_height, image_width, cell_width, cell_height, anchors = height_and_width_info
     
 
     images, labels = load_images_and_labels(images_dir_path, labels_path, classes, height_and_width_info)
