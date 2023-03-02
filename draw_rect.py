@@ -10,7 +10,10 @@ from math import floor
 
 import torch 
 import numpy as np
-from PIL import Image
+from metrics.utils import *
+from metrics.BoundingBox import BoundingBox
+from metrics.BoundingBoxes import BoundingBoxes
+from metrics.Evaluator import *
 
 
 def non_max_surpression(predictions, confidence_treshold=0.5):
@@ -25,9 +28,9 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
             all predictions with lower confidence than this will be surpressed
     '''
     device = predictions.device
-    # Surpressing all predictions with confidence less than confidence_treshold
     zeros_vector = torch.zeros((predictions.shape[-1])).to(device)
     confidences = predictions[..., 4]
+    # Surpressing all predictions with confidence less than confidence_treshold
     predictions[confidences < confidence_treshold] = zeros_vector
 
     class_probabilities = predictions[..., 5:]
@@ -56,11 +59,11 @@ def get_corners(prediction):
     top_left_corner_y = bb_center_y - bb_height/2
     top_left_corner = (top_left_corner_x, top_left_corner_y)
 
-    bot_left_corner_x = bb_center_x + bb_width/2
-    bot_left_corner_y = bb_center_y + bb_height/2
-    bot_left_corner = (bot_left_corner_x, bot_left_corner_y)
+    bot_right_corner_x = bb_center_x + bb_width/2
+    bot_right_corner_y = bb_center_y + bb_height/2
+    bot_right_corner = (bot_right_corner_x, bot_right_corner_y)
 
-    return top_left_corner, bot_left_corner
+    return top_left_corner, bot_right_corner
 
 
 def get_intersect(top_left_corner1, bot_right_corner_1, top_left_corner2, bot_right_corner_2):
@@ -189,14 +192,18 @@ def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_widt
     plt.show()
 
 
-def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, color):
+def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding_boxes_list, classes, image_name, ground_truth, color, confidence_treshold=0.5):
+    '''
+    Adds bounding box to axis so it can be plotted.
+    Adds bounding box to list of bounding boxes so we can track its metrics
+    '''
 
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
-    bounding_boxes = surpress_overlaping_detections(bounding_boxes)
+    #bounding_boxes = surpress_overlaping_detections(bounding_boxes)
     
     for bounding_box in bounding_boxes:
 
-        if bounding_box[4] < 0.1:
+        if bounding_box[4] < confidence_treshold:
             continue
 
         # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
@@ -221,13 +228,17 @@ def add_bounding_boxes_to_axis(bounding_boxes, axis, classes, color):
         # Making sure the box fits the image (doesnt go beyond)
         # top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
         # top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
+        
+        bbType = BBType.GroundTruth if ground_truth else BBType.Detected
+        bb = BoundingBox(image_name, object_class, top_left_corner_x, top_left_corner_y, box_width, box_height, bbType=bbType, classConfidence=confidence)
+        bounding_boxes_list.addBoundingBox(bb)
 
         rect = matplotlib.patches.Rectangle((top_left_corner_x, top_left_corner_y), box_width, box_height, fill=False, edgecolor=color) 
         axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = class_and_confidence, color = color)
         axis.add_patch(rect)
 
 
-def output_predictions(images, labels_list, predictions, images_names, epoch_num, params):
+def output_predictions(images, labels_list, predictions, images_names, epoch_num, params, confidence_treshold=0.5):
     '''
     Outputs prediction detections and true label boxes on images
 
@@ -238,7 +249,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         - images_names
     '''
 
-    height_and_width_info, output_dir_path, train_text_file, classes = params
+    height_and_width_info, output_dir_path, text_file, classes = params
 
     output_dir = os.path.join(output_dir_path, str(epoch_num))
     if not os.path.exists(output_dir):
@@ -256,23 +267,16 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
     labels_list[..., 0] *= cell_width
     labels_list[..., 1] *= cell_height
-
-    #labels_list[..., 2] *= anchor_width
-    #labels_list[..., 3] *= anchor_height
-
     labels_list[..., 2] *= anchors[:,0]
     labels_list[..., 3] *= anchors[:,1]
 
     predictions[..., 0] *= cell_width
     predictions[..., 1] *= cell_height
-
-
-    #predictions[..., 2] *= anchor_width
-    #predictions[..., 3] *= anchor_height
-
-
     predictions[..., 2] *= anchors[:,0]
     predictions[..., 3] *= anchors[:,1]
+
+    bounding_boxes_list = BoundingBoxes()
+    evaluator = Evaluator()
 
 
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):
@@ -281,8 +285,8 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         image = np.transpose(image, (1,2,0))
         axis.imshow(image)
 
-        add_bounding_boxes_to_axis(labels, axis, classes, color='green')
-        add_bounding_boxes_to_axis(prediction, axis, classes, color='red')
+        add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='green')
+        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='red')
 
         image_path = os.path.join(output_dir, image_name)
         plt.savefig(image_path)
@@ -292,6 +296,36 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
         prediction = prediction.reshape((-1, prediction.shape[-1]))
         np.savetxt(image_path + '.txt', prediction, fmt='% 1.2f')
+    
+    
+    metricsPerClass = evaluator.GetPascalVOCMetrics(
+        bounding_boxes_list,  # Object containing all bounding boxes (ground truths and detections)
+        IOUThreshold=0.3,  # IOU threshold
+        method=MethodAveragePrecision.EveryPointInterpolation # As the official matlab code
+        ) 
+    
+    
+   
+    text_file.write(f'epoch {epoch_num} ')
+    # Loop through classes to obtain their metrics
+    total_average_precision = 0
+
+    metricsPerClass = sorted(metricsPerClass, key=lambda x: x['class'])
+    for mc in metricsPerClass:
+        c = mc['class']
+        average_precision = mc['AP']
+        total_average_precision += average_precision
+        #ipre = mc['interpolated precision']
+        #irec = mc['interpolated recall']
+        #precision = mc['precision']
+        #recall = mc['recall']
+        text_file.write(f'{c} = {str(average_precision)[:4]}    ')
+
+    total_average_precision /= len(metricsPerClass)
+    text_file.write(f'average = {str(total_average_precision)[:4]}')
+
+    text_file.write('\n')
+    
 
 
         
