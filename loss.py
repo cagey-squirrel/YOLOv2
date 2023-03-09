@@ -2,7 +2,7 @@ import torch
 
 class YoloLoss(torch.nn.Module):
 
-    def __init__(self, lambda_conf_obj_detected=1, lambda_conf_obj_not_detected=0.01, lambda_class_loss=1, lambda_coord_loss=0.00000001):
+    def __init__(self, input_params):
         super().__init__()
         
         # Loss functions:
@@ -12,10 +12,10 @@ class YoloLoss(torch.nn.Module):
         self.ce_loss = torch.nn.CrossEntropyLoss(weight=torch.Tensor([6, 4.3, 4.3, 10, 15, 18, 6.7]).to(device), reduction='sum')
 
         # Lambdas:
-        self.lambda_conf_obj_detected = lambda_conf_obj_detected
-        self.lambda_conf_obj_not_detected = lambda_conf_obj_not_detected
-        self.lambda_class_loss = lambda_class_loss
-        self.lambda_coord_loss = lambda_coord_loss
+        self.lambda_conf_obj_detected = input_params['lambda_conf_obj_detected']
+        self.lambda_conf_obj_not_detected = input_params['lambda_conf_obj_not_detected']
+        self.lambda_class_loss = input_params['lambda_class_loss']
+        self.lambda_coord_loss = input_params['lambda_coord_loss']
 
 
 

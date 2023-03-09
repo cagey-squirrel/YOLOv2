@@ -192,7 +192,7 @@ def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_widt
     plt.show()
 
 
-def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding_boxes_list, classes, image_name, ground_truth, color, confidence_treshold=0.5):
+def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding_boxes_list, classes, image_name, ground_truth, color, confidence_treshold):
     '''
     Adds bounding box to axis so it can be plotted.
     Adds bounding box to list of bounding boxes so we can track its metrics
@@ -238,7 +238,7 @@ def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding
         axis.add_patch(rect)
 
 
-def output_predictions(images, labels_list, predictions, images_names, epoch_num, params, confidence_treshold=0.5):
+def output_predictions(images, labels_list, predictions, images_names, epoch_num, params, classes, batch_num):
     '''
     Outputs prediction detections and true label boxes on images
 
@@ -249,7 +249,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         - images_names
     '''
 
-    height_and_width_info, output_dir_path, text_file, classes = params
+    height_and_width_info, output_dir_path, text_file, classes, confidence_treshold = params
 
     output_dir = os.path.join(output_dir_path, str(epoch_num))
     if not os.path.exists(output_dir):
@@ -278,37 +278,43 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     bounding_boxes_list = BoundingBoxes()
     evaluator = Evaluator()
 
-
+    fig, axis = plt.subplots()
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):
-        fig, axis = plt.subplots()
+        
 
-        image = np.transpose(image, (1,2,0))
-        axis.imshow(image)
+        
 
-        add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='green')
-        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='red')
+        add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='green', confidence_treshold=confidence_treshold)
+        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='red', confidence_treshold=confidence_treshold)
 
-        image_path = os.path.join(output_dir, image_name)
-        plt.savefig(image_path)
+        if batch_num < 3:
+            image = np.transpose(image, (1,2,0))
+            axis.imshow(image)
+            image_path = os.path.join(output_dir, image_name)
+            plt.savefig(image_path)
+            plt.cla()
+            prediction = prediction.reshape((-1, prediction.shape[-1]))
+            np.savetxt(image_path + '.txt', prediction, fmt='% 1.2f')
 
         #labels = labels.reshape((-1, labels.shape[-1]))
         #np.savetxt(image_path + '.txt', labels, fmt='% 1.2f')
 
-        prediction = prediction.reshape((-1, prediction.shape[-1]))
-        np.savetxt(image_path + '.txt', prediction, fmt='% 1.2f')
+        
     
     
     metricsPerClass = evaluator.GetPascalVOCMetrics(
         bounding_boxes_list,  # Object containing all bounding boxes (ground truths and detections)
-        IOUThreshold=0.3,  # IOU threshold
+        IOUThreshold=0.5,  # IOU threshold
         method=MethodAveragePrecision.EveryPointInterpolation # As the official matlab code
         ) 
     
     
    
-    text_file.write(f'epoch {epoch_num} ')
+    # text_file.write(f'epoch {epoch_num} ')
     # Loop through classes to obtain their metrics
     total_average_precision = 0
+    
+    metrics_dict = {}
 
     metricsPerClass = sorted(metricsPerClass, key=lambda x: x['class'])
     for mc in metricsPerClass:
@@ -319,12 +325,30 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         #irec = mc['interpolated recall']
         #precision = mc['precision']
         #recall = mc['recall']
-        text_file.write(f'{c} = {str(average_precision)[:4]}    ')
+        metrics_dict[c] = average_precision
+        # text_file.write(f'{c} = {str(average_precision)[:4]}    ')
+    
+    metrics = np.zeros(7)
+    for i, object_class in enumerate(classes):
+        if object_class in metrics_dict:
+            metrics[i] += metrics_dict[object_class]
 
-    total_average_precision /= len(metricsPerClass)
-    text_file.write(f'average = {str(total_average_precision)[:4]}')
+    # total_average_precision /= len(metricsPerClass)
+    # text_file.write(f'average = {str(total_average_precision)[:4]}')
 
-    text_file.write('\n')
+    # text_file.write('\n')
+    return metrics
+
+
+def write_metrics(metrics, classes, text_file, epoch_num):
+
+    text_file.write(f'epoch: = {epoch_num}      ')
+
+    for metric, metric_class in zip(metrics, classes):
+        text_file.write(f'{metric_class} = {str(metric)[:5]}      ')
+    
+    mean_metric = metrics.mean()
+    text_file.write(f'average = {mean_metric}\n')
     
 
 

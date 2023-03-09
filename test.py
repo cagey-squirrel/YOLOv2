@@ -10,35 +10,31 @@ import numpy as np
 import random
 import json
 
-def training_epoch(network, train_data, loss_function, optimizer, device, epoch_num, train_params):
+def training_epoch(network, train_data, loss_function, device, train_params):
     
     total_loss = 0 
     batches = 0
     *unused, train_text_file, classes, confidence_treshold = train_params
     metrics = np.zeros(len(classes))
 
-    with torch.set_grad_enabled(True):
-        optimizer.zero_grad()
+    with torch.set_grad_enabled(False):
+    
         for (images, images_names), labels in train_data:
             images, labels = images.to(device), labels.to(device)
             predictions = network(images)
 
             loss = loss_function(predictions, labels)
-            loss.backward()
-
             total_loss += loss.item()
 
-            optimizer.step()
 
-            if epoch_num % 10 == 0: #or epoch_num < 10:
-                new_metrics = output_predictions(images, labels, predictions, images_names, epoch_num, train_params, classes, batches)
-                metrics += new_metrics
+            
+            new_metrics = output_predictions(images, labels, predictions, images_names, 0, train_params, classes, batches)
+            metrics += new_metrics
             
             batches += 1
     
-    if epoch_num % 10 == 0: # or epoch_num < 10:
-        metrics = metrics / batches
-        write_metrics(metrics, classes, train_text_file, epoch_num)        
+    metrics = metrics / batches
+    write_metrics(metrics, classes, train_text_file, 0)        
         
             
 
@@ -46,11 +42,11 @@ def training_epoch(network, train_data, loss_function, optimizer, device, epoch_
 
     
 
-    print(f'epoch {epoch_num} train loss = {total_loss}')
+    print(f'epoch {0} train loss = {total_loss}')
     #input('train_loss')
     return total_loss
 
-def validation_epoch(network, validation_data, loss_function, device, epoch_num, valid_params):
+def validation_epoch(network, validation_data, loss_function, device, valid_params):
     
     total_loss = 0 
     batches = 0
@@ -65,26 +61,24 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
             #loss = 0
             total_loss += loss
             
-
-            if epoch_num % 10 == 0: # or epoch_num < 10:
-                new_metrics = output_predictions(images, labels, predictions, images_names, epoch_num, valid_params, classes, batches)
-                metrics += new_metrics
+            new_metrics = output_predictions(images, labels, predictions, images_names, 0, valid_params, classes, batches)
+            metrics += new_metrics
             
             batches += 1
     
-    if epoch_num % 10 == 0: # or epoch_num < 10:
-        metrics = metrics / batches
-        write_metrics(metrics, classes, valid_text_file, epoch_num)
+
+    metrics = metrics / batches
+    write_metrics(metrics, classes, valid_text_file, 0)
 
             
 
     total_loss /= batches 
 
 
-    print(f'epoch {epoch_num} valid loss = {total_loss}')
+    print(f'epoch {0} valid loss = {total_loss}')
     return total_loss
 
-def training(classes, height_and_width_info, input_params):
+def test(classes, height_and_width_info, input_params):
 
     num_classes = len(classes)
     *rest, anchors = height_and_width_info
@@ -94,6 +88,7 @@ def training(classes, height_and_width_info, input_params):
     labels_path = input_params['labels_path']
 
     confidence_treshold = input_params['confidence_treshold']
+    trained_model_path = input_params['trained_model_path']
     
     output_dir_name = input_params['output_dir_name']
     output_dir_name += str(time())
@@ -118,35 +113,30 @@ def training(classes, height_and_width_info, input_params):
     valid_text_file.writelines(json.dumps(input_params) + '\n')
 
     train_loader, test_loader = make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info)
-    
-    loss_function = YoloLoss(input_params)
-    
-    device = torch.device("cpu" if not torch.cuda.is_available() else "cuda:0")
-    
     network = TinyYOLOv2(num_classes=num_classes, anchors=anchors)
+    
+    clip_grad_value_(network.parameters(), 1)
+    loss_function = YoloLoss(input_params)
 
-    if input_params['overtrain_model']:
-        trained_model_path = input_params['trained_model_path']
-        state_dict = torch.load(trained_model_path) if torch.cuda.is_available() else torch.load(trained_model_path, map_location='cpu')
-        network.load_state_dict(state_dict)
-        
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        state_dict = torch.load(trained_model_path)
+    else:
+        device = torch.device("cpu")
+        state_dict = torch.load(trained_model_path, map_location='cpu')
+
+    network.load_state_dict(state_dict)
     network.to(device)
-    optimizer = torch.optim.Adam(network.parameters(), lr=input_params['learning_rate'])
-    clip_grad_value_(network.parameters(), input_params['clip_gradient_value'])
 
     train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold
     valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold
 
-    
-    for epoch_num in range(num_epochs):
         
-        time_start_epoch = time()
-        validation_epoch(network, test_loader, loss_function, device, epoch_num, valid_params)
-        training_epoch(network, train_loader, loss_function, optimizer, device, epoch_num, train_params)
-        print(f'epoch {epoch_num} finished in {time() - time_start_epoch}\n')
+    time_start_epoch = time()
+    validation_epoch(network, test_loader, loss_function, device, valid_params)
+    training_epoch(network, train_loader, loss_function, device, train_params)
+    print(f'epoch {0} finished in {time() - time_start_epoch}\n')
 
-        if (epoch_num + 1) % 500 == 0:
-            torch.save(network.state_dict(), os.path.join(trained_models_dir_path, f"unet_model__{(epoch_num + 1)//500}.pt"))
     
     # for images, labels in train_loader:
     #     images = images.to(device)

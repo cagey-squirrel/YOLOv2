@@ -126,8 +126,8 @@ class Evaluator:
             # compute precision, recall and average precision
             acc_FP = np.cumsum(FP)
             acc_TP = np.cumsum(TP)
-            rec = acc_TP / npos
-            prec = np.divide(acc_TP, (acc_FP + acc_TP))
+            rec = (acc_TP + 1) / (npos + 1)
+            prec = np.divide((acc_TP + 1), (acc_FP + acc_TP + 1))
             # Depending on the method, call the right implementation
             if method == MethodAveragePrecision.EveryPointInterpolation:
                 [ap, mpre, mrec, ii] = Evaluator.CalculateAveragePrecision(rec, prec)

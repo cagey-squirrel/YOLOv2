@@ -3,18 +3,15 @@ import random
 from time import time
 import os
 from train import training
+from test import test
+import json
 
 def main():
     np.random.seed(1302)
     random.seed(1302)
-    images_dir_path = 'C:\\Users\\cvetk\\OneDrive\\Desktop\\Master\\KV\\cropped_images_small'
-    labels_path = 'annotations//Alan-Ford-color-export.csv'
-    labels_path = 'annotations//annotations_small.csv'
-    classes = ['Broj 1', 'Alan Ford', 'Bob Rok', 'Sir Oliver', 'Grunf', 'Jeremija', 'Sef']
 
-    output_dir_name = 'first_training2' + str(time())
-    output_dir_path = os.path.join('output', output_dir_name)
-    os.mkdir(output_dir_path)
+    input_params_file = open('input_params.json')
+    input_params = json.load(input_params_file)
 
     image_height = 384
     image_width = 576
@@ -23,6 +20,7 @@ def main():
 
     anchors = \
         [
+            #(175, 175),
             (150, 150),
             (250, 250)
         ]
@@ -32,8 +30,10 @@ def main():
 
     
     height_and_width_info = image_height, image_width, cell_width, cell_height, anchors
+    classes = ['Broj 1', 'Alan Ford', 'Bob Rok', 'Sir Oliver', 'Grunf', 'Jeremija', 'Sef']
     
-    training(images_dir_path, labels_path, classes, 1500, height_and_width_info, output_dir_path)
+    training(classes, height_and_width_info, input_params)
+    #test(classes, height_and_width_info, input_params)
 
 
 if __name__ == "__main__":
