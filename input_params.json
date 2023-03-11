@@ -1,0 +1,21 @@
+{
+    "images_dir_path" : "/media/workstation/Disk 1/cropped_images",
+    "labels_path" : "annotations//Alan-Ford-color-export.csv",
+    "labels_path_samo_lice" : "annotations//Alan_samo_lica.csv",
+    "output_dir_name" : "dual_anchor_samo_lica",
+    "images_output_dir_name" : "/media/workstation/Disk 1/dtc_output",
+    "trained_models_output_dir_name" : "/media/workstation/Disk 1/dtc_trained_models",
+    "num_anchors" : 2,
+    "lambda_conf_obj_detected" : 1,
+    "lambda_conf_obj_not_detected" : 0.1,
+    "lambda_class_loss" : 1,
+    "lambda_coord_loss" : 0.00000001,
+    "num_epochs" : 1001,
+    "learning_rate" : 0.000001,
+    "confidence_treshold" : 0.5,
+    "trained_model_path2" : "/media/workstation/Disk 1/dtc_trained_models/Single anchor whole dataset1678324870.4790654/unet_model__6.pt",
+    "trained_model_path" : "/media/workstation/Disk 1/dtc_trained_models/dual_anchor1678462389.075055/unet_model__0.pt",
+    "overtrain_model" : false,
+    "clip_gradient_value" : 1,
+    "mode" : "training"
+}
