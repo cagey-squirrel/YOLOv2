@@ -16,6 +16,23 @@ from metrics.BoundingBoxes import BoundingBoxes
 from metrics.Evaluator import *
 
 
+def average_metrics(metrics):
+    '''
+    This function calculated average metrics
+    metric_pair is consisted of two numbers: metric_sum and class_present_sum
+    - metric_sum is the sum of all metrics in all batches
+    - class_present_sum stores how many batches actually contained this class
+      this number is essential because if batch doesnt contain a certain class
+      then metrics for that class will be 0, even though we didnt really make any mistake
+      there's just not an object present
+    '''
+    averaged_metrics = []
+    for metric_sum, class_present_sum in metrics:
+        averaged_metrics.append(metric_sum / class_present_sum)
+    
+    return np.array(averaged_metrics)
+
+
 def non_max_surpression(predictions, confidence_treshold=0.5):
     '''
     Surpress any predictions with confidence less than confidence_treshold
@@ -192,7 +209,7 @@ def display_images_with_bounding_boxes(image, bounding_boxes, classes, cell_widt
     plt.show()
 
 
-def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding_boxes_list, classes, image_name, ground_truth, color, confidence_treshold):
+def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding_boxes_list, classes, image_name, ground_truth, color, confidence_treshold, mode):
     '''
     Adds bounding box to axis so it can be plotted.
     Adds bounding box to list of bounding boxes so we can track its metrics
@@ -249,7 +266,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         - images_names
     '''
 
-    height_and_width_info, output_dir_path, text_file, classes, confidence_treshold = params
+    height_and_width_info, output_dir_path, text_file, classes, confidence_treshold, mode = params
 
     output_dir = os.path.join(output_dir_path, str(epoch_num))
     if not os.path.exists(output_dir):
@@ -284,10 +301,10 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
         
 
-        add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='green', confidence_treshold=confidence_treshold)
-        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='red', confidence_treshold=confidence_treshold)
+        add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='green', confidence_treshold=confidence_treshold, mode=mode)
+        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='red', confidence_treshold=confidence_treshold, mode=mode)
 
-        if batch_num < 3:
+        if batch_num < 3 or mode == 'testing':
             image = np.transpose(image, (1,2,0))
             axis.imshow(image)
             image_path = os.path.join(output_dir, image_name)
@@ -315,6 +332,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     total_average_precision = 0
     
     metrics_dict = {}
+    tp_fp_fn_dict = {}
 
     metricsPerClass = sorted(metricsPerClass, key=lambda x: x['class'])
     for mc in metricsPerClass:
@@ -326,29 +344,49 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         #precision = mc['precision']
         #recall = mc['recall']
         metrics_dict[c] = average_precision
+        tp, fp, fn = mc['TP'], mc['FP'], mc['FN']
+        tp_fp_fn_dict[c] = [tp, fp, fn]
         # text_file.write(f'{c} = {str(average_precision)[:4]}    ')
     
-    metrics = np.zeros(7)
+
+    
+    metrics = np.array([[0, 0] for _ in classes])
+    tp_fp_fn = np.array([[0, 0, 0] for _ in classes]).astype('int64')
+
     for i, object_class in enumerate(classes):
         if object_class in metrics_dict:
-            metrics[i] += metrics_dict[object_class]
+            metrics[i][0] += metrics_dict[object_class]
+            metrics[i][1] = 1
+
+            current_tp_fp_fn = np.array(tp_fp_fn_dict[object_class]).astype('int64')
+            tp_fp_fn[i] += current_tp_fp_fn
+
 
     # total_average_precision /= len(metricsPerClass)
     # text_file.write(f'average = {str(total_average_precision)[:4]}')
 
     # text_file.write('\n')
-    return metrics
+    return metrics, tp_fp_fn
 
 
-def write_metrics(metrics, classes, text_file, epoch_num):
+def write_metrics(metrics, tp_fp_fn, classes, text_file, epoch_num):
 
-    text_file.write(f'epoch: = {epoch_num}      ')
+    text_file.write(f'epoch: = {epoch_num}   ')
 
     for metric, metric_class in zip(metrics, classes):
-        text_file.write(f'{metric_class} = {str(metric)[:5]}      ')
+        text_file.write(f'{metric_class} = {str(metric)[:5]}   ')
     
     mean_metric = metrics.mean()
-    text_file.write(f'average = {mean_metric}\n')
+    text_file.write(f'average = {str(mean_metric)[:5]}\n')
+
+    for (tp, fp, fn), metric_class in zip(tp_fp_fn, classes):
+        text_file.write(f'{metric_class} : TP:{tp} FP:{fp} FN:{fn}  ')
+    
+    total = tp_fp_fn.sum(axis=0)
+
+    text_file.write(f'total: TP:{total[0]} FP:{total[1]} FN:{total[2]}')    
+
+    text_file.write('\n\n')
     
 
 

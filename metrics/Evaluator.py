@@ -62,7 +62,8 @@ class Evaluator:
             if bb.getBBType() == BBType.GroundTruth:
                 groundTruths.append([
                     bb.getImageName(),
-                    bb.getClassId(), 1,
+                    bb.getClassId(), 
+                    1, # Confidence = 1
                     bb.getAbsoluteBoundingBox(BBFormat.XYX2Y2)
                 ])
             else:
@@ -76,6 +77,7 @@ class Evaluator:
             if bb.getClassId() not in classes:
                 classes.append(bb.getClassId())
         classes = sorted(classes)
+        
         # Precision x Recall is obtained individually by each class
         # Loop through by classes
         for c in classes:
@@ -99,7 +101,10 @@ class Evaluator:
 
             # print("Evaluating class: %s (%d detections)" % (str(c), len(dects)))
             # Loop through detections
+            total_tp = 0
+            
             for d in range(len(dects)):
+                
                 # print('dect %s => %s' % (dects[d][0], dects[d][3],))
                 # Find ground truth image
                 gt = gts[dects[d][0]] if dects[d][0] in gts else []
@@ -114,10 +119,12 @@ class Evaluator:
                 if iouMax >= IOUThreshold:
                     if det[dects[d][0]][jmax] == 0:
                         TP[d] = 1  # count as true positive
+                        total_tp += 1
                         det[dects[d][0]][jmax] = 1  # flag as already 'seen'
                         # print("TP")
                     else:
-                        FP[d] = 1  # count as false positive
+                        #FP[d] = 1  # count as false positive
+                        total_tp += 1
                         # print("FP")
                 # - A detected "cat" is overlaped with a GT "cat" with IOU >= IOUThreshold.
                 else:
@@ -126,8 +133,17 @@ class Evaluator:
             # compute precision, recall and average precision
             acc_FP = np.cumsum(FP)
             acc_TP = np.cumsum(TP)
-            rec = (acc_TP + 1) / (npos + 1)
-            prec = np.divide((acc_TP + 1), (acc_FP + acc_TP + 1))
+            
+
+            # Avoiding division by 0
+            if npos == 0:
+                rec = acc_TP  # If npos is 0 then there cannot be true positives so they are also 0
+            else:
+                rec = (acc_TP) / (npos)
+            prec = np.divide((acc_TP), (acc_FP + acc_TP))
+            #print(f'TP = {acc_TP} FP = {acc_FP} rec = {rec} prec = {prec} npos = {npos}')
+            # print(f'for class {c} there are {acc_TP} TP and {acc_FP} FP with {npos} GT')
+
             # Depending on the method, call the right implementation
             if method == MethodAveragePrecision.EveryPointInterpolation:
                 [ap, mpre, mrec, ii] = Evaluator.CalculateAveragePrecision(rec, prec)
@@ -142,8 +158,9 @@ class Evaluator:
                 'interpolated precision': mpre,
                 'interpolated recall': mrec,
                 'total positives': npos,
-                'total TP': np.sum(TP),
-                'total FP': np.sum(FP)
+                'TP': total_tp,
+                'FP': np.sum(FP),
+                'FN': npos - np.sum(TP)
             }
             ret.append(r)
         return ret

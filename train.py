@@ -2,7 +2,7 @@ from pytorch_pipeline_util import make_torch_dataloaders
 from yolo_network import TinyYOLOv2
 from loss import YoloLoss
 import torch
-from draw_rect import non_max_surpression, display_images_with_bounding_boxes, output_predictions, write_metrics
+from draw_rect import non_max_surpression, display_images_with_bounding_boxes, output_predictions, write_metrics, average_metrics
 import os
 from time import time
 from torch.nn.utils.clip_grad import clip_grad_value_
@@ -14,8 +14,9 @@ def training_epoch(network, train_data, loss_function, optimizer, device, epoch_
     
     total_loss = 0 
     batches = 0
-    *unused, train_text_file, classes, confidence_treshold = train_params
-    metrics = np.zeros(len(classes))
+    *unused, train_text_file, classes, confidence_treshold, mode = train_params
+    metrics = np.array([[0, 0] for _ in classes])
+    tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
     with torch.set_grad_enabled(True):
         optimizer.zero_grad()
@@ -31,14 +32,15 @@ def training_epoch(network, train_data, loss_function, optimizer, device, epoch_
             optimizer.step()
 
             if epoch_num % 10 == 0: #or epoch_num < 10:
-                new_metrics = output_predictions(images, labels, predictions, images_names, epoch_num, train_params, classes, batches)
+                new_metrics, new_tp_fp_fn = output_predictions(images, labels, predictions, images_names, epoch_num, train_params, classes, batches)
                 metrics += new_metrics
+                tp_fp_fn += new_tp_fp_fn
             
             batches += 1
     
     if epoch_num % 10 == 0: # or epoch_num < 10:
-        metrics = metrics / batches
-        write_metrics(metrics, classes, train_text_file, epoch_num)        
+        averaged_metrics = average_metrics(metrics)
+        write_metrics(averaged_metrics, tp_fp_fn, classes, train_text_file, epoch_num)        
         
             
 
@@ -54,8 +56,9 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
     
     total_loss = 0 
     batches = 0
-    *unused, valid_text_file, classes, confidence_treshold = valid_params
-    metrics = np.zeros(len(classes))
+    *unused, valid_text_file, classes, confidence_treshold, mode = valid_params
+    metrics = np.array([[0, 0] for _ in classes])
+    tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
     with torch.set_grad_enabled(False):
         for (images, images_names), labels in validation_data:
@@ -67,14 +70,15 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
             
 
             if epoch_num % 10 == 0: # or epoch_num < 10:
-                new_metrics = output_predictions(images, labels, predictions, images_names, epoch_num, valid_params, classes, batches)
+                new_metrics, new_tp_fp_fn = output_predictions(images, labels, predictions, images_names, epoch_num, valid_params, classes, batches)
                 metrics += new_metrics
+                tp_fp_fn += new_tp_fp_fn
             
             batches += 1
     
     if epoch_num % 10 == 0: # or epoch_num < 10:
-        metrics = metrics / batches
-        write_metrics(metrics, classes, valid_text_file, epoch_num)
+        averaged_metrics = average_metrics(metrics)
+        write_metrics(averaged_metrics, tp_fp_fn, classes, valid_text_file, epoch_num)
 
             
 
@@ -94,9 +98,10 @@ def training(classes, height_and_width_info, input_params):
     labels_path = input_params['labels_path']
 
     confidence_treshold = input_params['confidence_treshold']
+    mode = input_params['mode']
     
     output_dir_name = input_params['output_dir_name']
-    output_dir_name += str(time())
+    #output_dir_name += str(time())
 
     images_output_dir_name = input_params['images_output_dir_name']
     output_dir_path = os.path.join(images_output_dir_name, output_dir_name)
@@ -134,8 +139,8 @@ def training(classes, height_and_width_info, input_params):
     optimizer = torch.optim.Adam(network.parameters(), lr=input_params['learning_rate'])
     clip_grad_value_(network.parameters(), input_params['clip_gradient_value'])
 
-    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold
-    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold
+    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold, mode
+    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold, mode
 
     
     for epoch_num in range(num_epochs):
@@ -145,8 +150,8 @@ def training(classes, height_and_width_info, input_params):
         training_epoch(network, train_loader, loss_function, optimizer, device, epoch_num, train_params)
         print(f'epoch {epoch_num} finished in {time() - time_start_epoch}\n')
 
-        if (epoch_num + 1) % 500 == 0:
-            torch.save(network.state_dict(), os.path.join(trained_models_dir_path, f"unet_model__{(epoch_num + 1)//500}.pt"))
+        if (epoch_num + 1) % 50 == 0:
+            torch.save(network.state_dict(), os.path.join(trained_models_dir_path, f"unet_model__{(epoch_num + 1)//50}.pt"))
     
     # for images, labels in train_loader:
     #     images = images.to(device)
