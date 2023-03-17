@@ -82,4 +82,4 @@ class YoloLoss(torch.nn.Module):
         # print(f'conf_loss = {conf_loss}')
         # print(f'class_loss = {class_loss}\n')
         total_loss = conf_loss + class_loss + coord_loss
-        return (total_loss) / total_num_cells
+        return total_loss  # / total_num_cells
