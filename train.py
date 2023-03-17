@@ -14,7 +14,7 @@ def training_epoch(network, train_data, loss_function, optimizer, device, epoch_
     
     total_loss = 0 
     batches = 0
-    *unused, train_text_file, classes, confidence_treshold, mode = train_params
+    *unused, train_text_file, classes, confidence_treshold, mode, overlap_treshold = train_params
     metrics = np.array([[0, 0] for _ in classes])
     tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
@@ -47,7 +47,6 @@ def training_epoch(network, train_data, loss_function, optimizer, device, epoch_
     total_loss /= batches 
 
     
-
     print(f'epoch {epoch_num} train loss = {total_loss}')
     #input('train_loss')
     return total_loss
@@ -56,9 +55,8 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
     
     total_loss = 0 
     batches = 0
-    *unused, valid_text_file, classes, confidence_treshold, mode = valid_params
+    *unused, valid_text_file, classes, confidence_treshold, mode, overlap_treshold = valid_params
     metrics = np.array([[0, 0] for _ in classes])
-    tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
     with torch.set_grad_enabled(False):
         for (images, images_names), labels in validation_data:
@@ -84,7 +82,6 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
 
     total_loss /= batches 
 
-
     print(f'epoch {epoch_num} valid loss = {total_loss}')
     return total_loss
 
@@ -98,10 +95,16 @@ def training(classes, height_and_width_info, input_params):
     labels_path = input_params['labels_path']
 
     confidence_treshold = input_params['confidence_treshold']
+    overlap_treshold = input_params['overlap_treshold']
+    network_type = input_params['network_type']
+    augment = input_params['augment']
     mode = input_params['mode']
     
+    
+    
+    
     output_dir_name = input_params['output_dir_name']
-    #output_dir_name += str(time())
+    output_dir_name += str(time())
 
     images_output_dir_name = input_params['images_output_dir_name']
     output_dir_path = os.path.join(images_output_dir_name, output_dir_name)
@@ -122,13 +125,14 @@ def training(classes, height_and_width_info, input_params):
     train_text_file.writelines(json.dumps(input_params) + '\n')
     valid_text_file.writelines(json.dumps(input_params) + '\n')
 
-    train_loader, test_loader = make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info)
+    print('Making datasets...')
+    train_loader, test_loader = make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info, augment=augment)
     
     loss_function = YoloLoss(input_params)
     
     device = torch.device("cpu" if not torch.cuda.is_available() else "cuda:0")
     
-    network = TinyYOLOv2(num_classes=num_classes, anchors=anchors)
+    network = TinyYOLOv2(num_classes=num_classes, anchors=anchors, network_type=network_type)
 
     if input_params['overtrain_model']:
         trained_model_path = input_params['trained_model_path']
@@ -139,10 +143,10 @@ def training(classes, height_and_width_info, input_params):
     optimizer = torch.optim.Adam(network.parameters(), lr=input_params['learning_rate'])
     clip_grad_value_(network.parameters(), input_params['clip_gradient_value'])
 
-    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold, mode
-    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold, mode
+    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold, mode, overlap_treshold
+    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold, mode, overlap_treshold
 
-    
+    print('Starting training...')
     for epoch_num in range(num_epochs):
         
         time_start_epoch = time()
@@ -151,7 +155,7 @@ def training(classes, height_and_width_info, input_params):
         print(f'epoch {epoch_num} finished in {time() - time_start_epoch}\n')
 
         if (epoch_num + 1) % 50 == 0:
-            torch.save(network.state_dict(), os.path.join(trained_models_dir_path, f"unet_model__{(epoch_num + 1)//50}.pt"))
+            torch.save(network.state_dict(), os.path.join(trained_models_dir_path, f"unet_model__{(epoch_num + 1)}.pt"))
     
     # for images, labels in train_loader:
     #     images = images.to(device)
