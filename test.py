@@ -14,7 +14,7 @@ def training_epoch(network, train_data, loss_function, device, train_params):
     
     total_loss = 0 
     batches = 0
-    *unused, train_text_file, classes, confidence_treshold, mode = train_params
+    *unused, train_text_file, classes, confidence_treshold, mode, overlap_treshold = train_params
     metrics = np.array([[0, 0] for _ in classes])
     tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
@@ -52,7 +52,7 @@ def validation_epoch(network, validation_data, loss_function, device, valid_para
     
     total_loss = 0 
     batches = 0
-    *unused, valid_text_file, classes, confidence_treshold, mode = valid_params
+    *unused, valid_text_file, classes, confidence_treshold, mode, overlap_treshold = valid_params
     metrics = np.array([[0, 0] for _ in classes])
     tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
@@ -64,7 +64,7 @@ def validation_epoch(network, validation_data, loss_function, device, valid_para
             #loss = 0
             total_loss += loss
             
-            new_metrics, new_tp_fp_fn = output_predictions(images, labels, predictions, images_names, 0, valid_params, classes, batches)
+            new_metrics, new_tp_fp_fn = output_predictions(images, labels, predictions, images_names, 1, valid_params, classes, batches)
             metrics += new_metrics
             tp_fp_fn += new_tp_fp_fn
             
@@ -89,9 +89,12 @@ def test(classes, height_and_width_info, input_params):
     images_dir_path = input_params['images_dir_path']
     labels_path = input_params['labels_path']
 
+    
     confidence_treshold = input_params['confidence_treshold']
-    mode = input_params['mode']
     trained_model_path = input_params['trained_model_path']
+    overlap_treshold = input_params['overlap_treshold']
+    network_type = input_params['network_type']
+    mode = input_params['mode']
     
     output_dir_name = 'test_' + input_params['output_dir_name']
     output_dir_name += str(time())
@@ -112,7 +115,7 @@ def test(classes, height_and_width_info, input_params):
     valid_text_file.writelines(json.dumps(input_params) + '\n')
 
     train_loader, test_loader = make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info)
-    network = TinyYOLOv2(num_classes=num_classes, anchors=anchors)
+    network = TinyYOLOv2(num_classes=num_classes, anchors=anchors, network_type=network_type)
     
     clip_grad_value_(network.parameters(), 1)
     loss_function = YoloLoss(input_params)
@@ -127,8 +130,8 @@ def test(classes, height_and_width_info, input_params):
     network.load_state_dict(state_dict)
     network.to(device)
 
-    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold, mode
-    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold, mode
+    train_params = height_and_width_info, train_output_dir_path, train_text_file, classes, confidence_treshold, mode, overlap_treshold
+    valid_params = height_and_width_info, valid_output_dir_path, valid_text_file, classes, confidence_treshold, mode, overlap_treshold
 
         
     time_start_epoch = time()

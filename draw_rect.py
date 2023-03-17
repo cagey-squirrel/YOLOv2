@@ -40,19 +40,18 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
 
     Parameters:
         - predictions (torch.Tensor): prediction vector which will be surpressed
-            this vector has a shape of (B, W, H, (5 + Num_Classes))
+            this vector has a shape of (A, W, H, (5 + Num_Classes))
         - confidence_treshold (float: between 0 and 1): minimum confidence required for prediction
             all predictions with lower confidence than this will be surpressed
     '''
-    device = predictions.device
-    zeros_vector = torch.zeros((predictions.shape[-1])).to(device)
+
+    zeros_vector = np.zeros((predictions.shape[-1]))  # shape is (5 + num_classes)
     confidences = predictions[..., 4]
     # Surpressing all predictions with confidence less than confidence_treshold
-    predictions[confidences < confidence_treshold] = zeros_vector
+    #predictions[confidences < confidence_treshold] = zeros_vector
 
     class_probabilities = predictions[..., 5:]
-    
-    maxes, max_indices = class_probabilities.max(dim=-1)
+    maxes = class_probabilities.max(axis=-1)
     maxes = maxes[..., None]
     class_one_hot = (class_probabilities == maxes)
     
@@ -61,7 +60,9 @@ def non_max_surpression(predictions, confidence_treshold=0.5):
         same_class = class_one_hot[..., class_index]
         conf_times_class = confidences * same_class
         class_conf_maxes = conf_times_class.max()
-        predictions[torch.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
+        
+
+        predictions[np.logical_and(conf_times_class > 0, conf_times_class != class_conf_maxes)] = zeros_vector
     
 
 def get_corners(prediction):
@@ -114,7 +115,7 @@ def get_intersection_over_union(prediction1, prediction2):
 
 
 
-def surpress_overlaping_detections(predictions, overlap_treshold=0.1):
+def surpress_overlaping_detections(predictions, overlap_treshold=0.5):
     '''
     Returns a list of filtered predictions.
     If a prediction overlaps with another prediction for more than overlap_tereshold then the prediction with lower confidence is filtered
@@ -215,10 +216,13 @@ def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding
     Adds bounding box to list of bounding boxes so we can track its metrics
     '''
 
+
+    non_max_surpression(bounding_boxes)
     bounding_boxes = bounding_boxes.reshape(-1, bounding_boxes.shape[-1])
-    #bounding_boxes = surpress_overlaping_detections(bounding_boxes)
+    bounding_boxes = surpress_overlaping_detections(bounding_boxes)
     
     for bounding_box in bounding_boxes:
+
 
         if bounding_box[4] < confidence_treshold:
             continue
@@ -266,7 +270,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
         - images_names
     '''
 
-    height_and_width_info, output_dir_path, text_file, classes, confidence_treshold, mode = params
+    height_and_width_info, output_dir_path, text_file, classes, confidence_treshold, mode, overlap_treshold = params
 
     output_dir = os.path.join(output_dir_path, str(epoch_num))
     if not os.path.exists(output_dir):
@@ -297,14 +301,11 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
     fig, axis = plt.subplots()
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):
-        
-
-        
 
         add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='green', confidence_treshold=confidence_treshold, mode=mode)
         add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, bounding_boxes_list, classes, image_name, ground_truth=False, color='red', confidence_treshold=confidence_treshold, mode=mode)
 
-        if batch_num < 3 or mode == 'testing':
+        if batch_num < 3 or (mode == 'testing' and epoch_num==1):
             image = np.transpose(image, (1,2,0))
             axis.imshow(image)
             image_path = os.path.join(output_dir, image_name)
@@ -321,7 +322,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     
     metricsPerClass = evaluator.GetPascalVOCMetrics(
         bounding_boxes_list,  # Object containing all bounding boxes (ground truths and detections)
-        IOUThreshold=0.5,  # IOU threshold
+        IOUThreshold=overlap_treshold,  # IOU threshold
         method=MethodAveragePrecision.EveryPointInterpolation # As the official matlab code
         ) 
     
@@ -355,11 +356,11 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
     for i, object_class in enumerate(classes):
         if object_class in metrics_dict:
-            metrics[i][0] += metrics_dict[object_class]
+            metrics[i][0] = metrics_dict[object_class]
             metrics[i][1] = 1
 
             current_tp_fp_fn = np.array(tp_fp_fn_dict[object_class]).astype('int64')
-            tp_fp_fn[i] += current_tp_fp_fn
+            tp_fp_fn[i] = current_tp_fp_fn
 
 
     # total_average_precision /= len(metricsPerClass)

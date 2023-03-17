@@ -9,6 +9,7 @@ from torch.utils.data import random_split, Dataset, DataLoader
 from draw_rect import display_images_with_bounding_boxes
 import random
 from matplotlib import pyplot as plt
+from augmentors import augment_image
 
 def get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchors):
     '''
@@ -113,6 +114,7 @@ def get_anchor_index(top_left_corner_x, top_left_corner_y, bot_right_corner_x, b
     else:
         anchor_index = 1
     
+    return 0
     return anchor_index
 
 
@@ -152,14 +154,14 @@ def load_annotations(annotations_path, anchors):
 
 def load_images(images_dir, normalize=True):
     '''
-    Loads images from image_dir and returnes them as tensors
+    Loads images from image_dir
 
     Input:
         - images_dir (string): path to directory which contains images
     
     Returns:
-        - images (dict): dict containing image names as keys and touples (image (Tensor), image_name (string)) as values
-            example for loading images 'alan.jpg' : images['alan'] = Tensor(1, 4, 256, 256) where 4 is the num of channels
+        - images (list): list containing touples of (image [Tensor], image_name [string])
+            example for loading images 'alan.jpg' : images[0] = (Tensor(1, 3, 256, 256), 'alan') where 4 is the num of channels
     '''
     
     images = []
@@ -193,45 +195,62 @@ def load_images_and_labels(images_dir_path, labels_path, classes, height_and_wid
     Input:
         - images_path (string): path to directory which contains images
         - labels_path (string): path to a csv file which contains labels:
-        - dimension_reduction (int): when image passes through CNN its dimensions reduce in each layer
-          This number is equal to image_size_before_CNN // image_size_after_CNN
+        - classes (list of strings): list of classes for example ["Alan Ford", "Sir Oliver", ...]
+        - height_and_width_info (touple)
     
     Returns:
-        - image_data: list which contains images
-        - labels_data: list which contains labels
+        - image_data [list of (Tensor, string) touples]: list which contains images
+        - labels_data [list of Tensors]: list which contains labels
     '''
     
     images_data, image_names = load_images(images_dir_path)
-    
-
     labels_data = load_labels(labels_path, image_names, classes, height_and_width_info)
-
-    image_height = 384
-    image_width = 576
-    num_cells_height = 12 
-    num_cells_width = 18
-    anchor_height = 250
-    anchor_width = 300
-    cell_width = 32
-    cell_height = 32
 
     return images_data, labels_data
 
+
+def augment_training_set(images, labels):
+    '''
+    Augments training data by aplying random small distortions on images.
+    Images are slightly changed while labels remain unchanged for given image.
+    Augmented images and labels are extended to images and labels lists in-place
+
+    Inputs:
+        - image_data [list of (Tensor, string) touples]: list which contains images
+        - labels_data [list of Tensors]: list which contains labels
+
+    '''
+    augmented_images = []
+    augmented_labels = []
+
+    num = 0
+    for (image, image_name), label in zip(images, labels):
+        print(f'augmenting image {num} from {len(images)}'); num += 1
+        augmented_image = augment_image(image)
+        augmented_images.append((augmented_image, "aug1_"+image_name))
+        augmented_labels.append(label)
+        augmented_image = augment_image(image)
+        augmented_images.append((augmented_image, "aug2_"+image_name))
+        augmented_labels.append(label)
+
+    images.extend(augmented_images)
+    labels.extend(augmented_labels)
+
+
 def train_test_split(images, labels, test_percentage):
     '''
-    Splits images and labels into train and test dataset based on test_percentage.
-    Transforms data into tensors
+    Randomly splits images and labels into train and test dataset based on test_percentage.
 
     Input:
-        - images (list): list of loaded images
-        - labels (list): list of loaded labels (in same order as images)
+        - image_data [list of (Tensor, string) touples]: list which contains images
+        - labels_data [list of Tensors]: list which contains labels
         - test_percentage (int): percentage of examples that will go to test dataset (others will go to training)
     
     Returns:
-        - train_images (torch.Tensor): images for training 
-        - train_labels (torch.Tensor): labels for training
-        - test_images (torch.Tensor): images for testing
-        - test_labels (torch.Tensor): labels for testing
+        - train_images [list of (Tensor, string) touples]: list which contains images for training 
+        - train_labels [list of Tensors]: list which contains labels for training 
+        - test_images [list of (Tensor, string) touples]: list which contains images for testing
+        - test_labels [list of Tensors]: list which contains labels for testing
     '''
 
     total_length = len(images)
@@ -250,10 +269,10 @@ def train_test_split(images, labels, test_percentage):
     #images = images[random_permutation]
     #labels = labels[random_permutation]
 
-    test_images = images[:test_data_len]
-    test_labels = labels[:test_data_len]
-    train_images = images[test_data_len:]
-    train_labels = labels[test_data_len:]
+    test_images = list(images[:test_data_len])
+    test_labels = list(labels[:test_data_len])
+    train_images = list(images[test_data_len:])
+    train_labels = list(labels[test_data_len:])
     
     return train_images, train_labels, test_images, test_labels
 
@@ -286,7 +305,7 @@ def make_torch_datasets(training_images, training_labels, test_images, test_labe
     return train_dataset, test_dataset
 
 
-def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info, batch_size=8):
+def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info, batch_size=8, augment=False):
     '''
     This function loads all images and labels, splits them randomly into training and test set and wraps these datasets in DataLoader class.
     '''
@@ -296,6 +315,10 @@ def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_wid
 
     images, labels = load_images_and_labels(images_dir_path, labels_path, classes, height_and_width_info)
     training_images, training_labels, test_images, test_labels = train_test_split(images, labels, test_percentage=20)
+    
+    if augment:
+        augment_training_set(training_images, training_labels)
+
     train_dataset, test_dataset = make_torch_datasets(training_images, training_labels, test_images, test_labels)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, generator=torch.Generator().manual_seed(1302))
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, generator=torch.Generator().manual_seed(1302))
