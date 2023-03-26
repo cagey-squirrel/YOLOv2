@@ -250,13 +250,14 @@ def add_bounding_boxes_to_axis_and_bounding_boxes(bounding_boxes, axis, bounding
         # top_left_corner_x = min(max(1, top_left_corner_x), image_width-1)
         # top_left_corner_y = min(max(1, top_left_corner_y), image_height-1)
         
-        bbType = BBType.GroundTruth if ground_truth else BBType.Detected
-        bb = BoundingBox(image_name, object_class, top_left_corner_x, top_left_corner_y, box_width, box_height, bbType=bbType, classConfidence=confidence)
-        bounding_boxes_list.addBoundingBox(bb)
-
         rect = matplotlib.patches.Rectangle((top_left_corner_x, top_left_corner_y), box_width, box_height, fill=False, edgecolor=color) 
         axis.text(x=top_left_corner_x + 10, y = top_left_corner_y + 20, s = class_and_confidence, color = color)
         axis.add_patch(rect)
+
+        if mode != 'production':
+            bbType = BBType.GroundTruth if ground_truth else BBType.Detected
+            bb = BoundingBox(image_name, object_class, top_left_corner_x, top_left_corner_y, box_width, box_height, bbType=bbType, classConfidence=confidence)
+            bounding_boxes_list.addBoundingBox(bb)
 
 
 def output_predictions(images, labels_list, predictions, images_names, epoch_num, params, classes, batch_num):
@@ -300,6 +301,7 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     evaluator = Evaluator()
 
     fig, axis = plt.subplots()
+    #axis = None
     for image, labels, prediction, image_name in zip(images, labels_list, predictions, images_names):
 
         add_bounding_boxes_to_axis_and_bounding_boxes(labels, axis, bounding_boxes_list, classes, image_name, ground_truth=True, color='green', confidence_treshold=confidence_treshold, mode=mode)
@@ -316,6 +318,8 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
 
         #labels = labels.reshape((-1, labels.shape[-1]))
         #np.savetxt(image_path + '.txt', labels, fmt='% 1.2f')
+    
+    plt.close()
 
         
     
@@ -370,6 +374,46 @@ def output_predictions(images, labels_list, predictions, images_names, epoch_num
     return metrics, tp_fp_fn
 
 
+def production_output(images, predictions, images_names, params, classes, mode):
+
+    height_and_width_info, output_dir, classes, confidence_treshold = params
+    
+    images = images.detach().cpu().numpy()
+    predictions = predictions.detach().cpu().numpy()
+
+    image_height, image_width, cell_width, cell_height, anchors = height_and_width_info 
+    # Bounding box contains: (box_center_x, box_center_y, box_width, box_height, confidence, CLASS_ONE_HOT_ENCODING)
+    # Box_center_x, and Box_center_y are in units of cells so we need to multiply them to display them on image
+    # box_width and box_height are in units of anchor sizes so they too need to be multiplied in order to be displayed
+    #print(f'box_center_x = {bounding_box[0]} box_center_y = {bounding_box[1]}')
+
+    predictions[..., 0] *= cell_width
+    predictions[..., 1] *= cell_height
+    predictions[..., 2] *= anchors[:,0]
+    predictions[..., 3] *= anchors[:,1]
+
+    
+
+    fig, axis = plt.subplots()
+    #axis = None
+    for image, prediction, image_name in zip(images, predictions, images_names):
+
+        add_bounding_boxes_to_axis_and_bounding_boxes(prediction, axis, None, classes, image_name, ground_truth=False, color='red', confidence_treshold=confidence_treshold, mode=mode)
+
+        image = np.transpose(image, (1,2,0))
+        axis.imshow(image)
+        image_path = os.path.join(output_dir, image_name)
+        plt.savefig(image_path)
+        plt.cla()
+        prediction = prediction.reshape((-1, prediction.shape[-1]))
+        np.savetxt(image_path + '.txt', prediction, fmt='% 1.2f')
+
+        #labels = labels.reshape((-1, labels.shape[-1]))
+        #np.savetxt(image_path + '.txt', labels, fmt='% 1.2f')
+    
+    plt.close()
+
+
 def write_metrics(metrics, tp_fp_fn, classes, text_file, epoch_num):
 
     text_file.write(f'epoch: = {epoch_num}   ')
@@ -388,6 +432,8 @@ def write_metrics(metrics, tp_fp_fn, classes, text_file, epoch_num):
     text_file.write(f'total: TP:{total[0]} FP:{total[1]} FN:{total[2]}')    
 
     text_file.write('\n\n')
+
+    text_file.flush()
     
 
 

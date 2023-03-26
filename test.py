@@ -136,7 +136,7 @@ def test(classes, height_and_width_info, input_params):
         
     time_start_epoch = time()
     validation_epoch(network, test_loader, loss_function, device, valid_params)
-    training_epoch(network, train_loader, loss_function, device, train_params)
+    #training_epoch(network, train_loader, loss_function, device, train_params)
     print(f'epoch {0} finished in {time() - time_start_epoch}\n')
 
     

@@ -9,7 +9,8 @@ from torch.utils.data import random_split, Dataset, DataLoader
 from draw_rect import display_images_with_bounding_boxes
 import random
 from matplotlib import pyplot as plt
-from augmentors import augment_image
+from augmentors import augment_image, flip_image_and_annotation
+
 
 def get_center_and_size_of_annotation(annotation, cell_height, cell_width, anchors):
     '''
@@ -114,7 +115,8 @@ def get_anchor_index(top_left_corner_x, top_left_corner_y, bot_right_corner_x, b
     else:
         anchor_index = 1
     
-    return 0
+    # see as you can see
+    #return 0
     return anchor_index
 
 
@@ -225,13 +227,16 @@ def augment_training_set(images, labels):
 
     num = 0
     for (image, image_name), label in zip(images, labels):
-        print(f'augmenting image {num} from {len(images)}'); num += 1
+        #print(f'augmenting image {num} from {len(images)}'); num += 1
         augmented_image = augment_image(image)
         augmented_images.append((augmented_image, "aug1_"+image_name))
         augmented_labels.append(label)
         augmented_image = augment_image(image)
         augmented_images.append((augmented_image, "aug2_"+image_name))
         augmented_labels.append(label)
+        flipped_image, flipped_label = flip_image_and_annotation(image, label)
+        augmented_images.append((flipped_image, "flip_"+image_name))
+        augmented_labels.append(flipped_label)
 
     images.extend(augmented_images)
     labels.extend(augmented_labels)
@@ -293,6 +298,21 @@ class YoloDetectionDataset(Dataset):
         label = self.labels[idx]
         
         return img, label
+
+
+class YoloProductionDataset(Dataset):
+
+    def __init__(self, images):
+        self.images = images
+        
+
+    def __len__(self):
+        return len(self.images)
+
+
+    def __getitem__(self, idx):
+        img = self.images[idx]
+        return img
     
 
 def make_torch_datasets(training_images, training_labels, test_images, test_labels):
@@ -303,6 +323,16 @@ def make_torch_datasets(training_images, training_labels, test_images, test_labe
     test_dataset = YoloDetectionDataset(test_images, test_labels)
 
     return train_dataset, test_dataset
+
+
+def production_dataloader(images_dir_path, batch_size=8):
+
+    images_data, image_names = load_images(images_dir_path)
+    
+    dataset = YoloProductionDataset(images_data)
+    loader = DataLoader(dataset, batch_size=batch_size, drop_last=True)
+    
+    return loader
 
 
 def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_width_info, batch_size=8, augment=False):
@@ -323,7 +353,7 @@ def make_torch_dataloaders(images_dir_path, labels_path, classes, height_and_wid
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, generator=torch.Generator().manual_seed(1302))
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, generator=torch.Generator().manual_seed(1302))
 
-    return train_loader, test_loader, 
+    return train_loader, test_loader
 
 
 def main():

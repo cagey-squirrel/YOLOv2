@@ -157,8 +157,8 @@ class Evaluator:
                 'AP': ap,
                 'interpolated precision': mpre,
                 'interpolated recall': mrec,
-                'total positives': npos,
-                'TP': total_tp,
+                'npos': npos,
+                'TP': np.sum(TP), #total_tp,
                 'FP': np.sum(FP),
                 'FN': npos - np.sum(TP)
             }

@@ -106,12 +106,12 @@ class TinyYOLOv2(torch.nn.Module):
     def forward_maxpool(self, x):
 
         x = self.relu(self.pool(self.norm1(self.conv1(x))))
-        
+
         x = self.relu(self.pool(self.norm2(self.conv2(x))))
         x = self.relu(self.pool(self.norm3(self.conv3(x))))
         
         if 'skip' in self.network_type:
-            x_for_concat = x
+            x_for_concat = x.reshape((8, 1024, 12, 18))
 
         x = self.relu(self.pool(self.norm4(self.conv4(x))))
         x = self.relu(self.pool(self.norm5(self.conv5(x))))
@@ -119,7 +119,6 @@ class TinyYOLOv2(torch.nn.Module):
         x = self.relu(self.norm7(self.conv7(x)))
 
         if 'skip' in self.network_type:
-            x_for_concat = x_for_concat.reshape((8, 1024, 12, 18))
             x = torch.cat([x, x_for_concat], dim=1)
 
         x = self.relu(self.norm8(self.conv8(x)))

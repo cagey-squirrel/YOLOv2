@@ -57,6 +57,7 @@ def validation_epoch(network, validation_data, loss_function, device, epoch_num,
     batches = 0
     *unused, valid_text_file, classes, confidence_treshold, mode, overlap_treshold = valid_params
     metrics = np.array([[0, 0] for _ in classes])
+    tp_fp_fn = np.array([[0, 0, 0] for _ in classes])
 
     with torch.set_grad_enabled(False):
         for (images, images_names), labels in validation_data:
