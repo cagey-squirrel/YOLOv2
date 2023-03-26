@@ -7,6 +7,7 @@ import numpy as np
 from torchvision.transforms.functional import affine, adjust_contrast
 import torch 
 import random
+from matplotlib import pyplot as plt
 
 
 def augment_image(image):
@@ -28,6 +29,40 @@ def augment_image(image):
         return shear_image(image)
     else:
         return change_image_contrast(image)
+
+
+def flip_image_and_annotation(image, label):
+    '''
+    This function flips image and its label along y-axis
+
+    Input:
+        -image (np.array): single image
+        - anotation (Tensor): single label
+    Output:
+        -flipped_image (np.array)
+        -flipped_label (Tensor)
+    '''
+    image = image.permute((1, 2, 0))
+    image = image.numpy()
+    flipped_image = np.fliplr(image)
+    flipped_image = flipped_image.transpose((2, 0, 1))
+    flipped_image = torch.from_numpy(flipped_image.copy())
+    
+    flipped_label = torch.zeros(label.shape)
+    non_zero_indices = (label[..., 4] > 0).nonzero(as_tuple=True)
+    
+    if non_zero_indices[0].nelement() == 0:
+        return flipped_image, flipped_label
+
+    coords1, coords2, coords3 = non_zero_indices
+
+    for coord1, coord2, coord3 in zip(coords1, coords2, coords3):
+        original_label = label[coord1, coord2, coord3].detach().clone()
+        original_label[0] = 18 - original_label[0]
+        flipped_label[18-coord1, coord2, coord3] = original_label
+
+    return flipped_image, flipped_label
+
 
 
 def rotate_image(image, angle=5):
